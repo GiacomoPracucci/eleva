@@ -1,0 +1,1 @@
+print("Hello, world!")  # This is a simple print statement to demonstrate code execution.
