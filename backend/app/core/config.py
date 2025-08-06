@@ -9,8 +9,6 @@ and/or a .env file, providing type validation and a single source of truth for c
 from pydantic_settings import BaseSettings
 from typing import List, Union
 from pydantic import AnyHttpUrl, field_validator
-import json
-
 
 class Settings(BaseSettings):
     """
@@ -110,4 +108,4 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 # Instantiate the settings object to be used throughout the application
-# settings = Settings()
+settings = Settings()

@@ -128,4 +128,4 @@ class CRUDSubject:
         return db_obj.owner_id == user_id
 
 
-#subject_crud = CRUDSubject()
+subject_crud = CRUDSubject()

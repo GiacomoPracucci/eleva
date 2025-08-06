@@ -174,4 +174,4 @@ class CRUDUser:
         return user.is_active
 
 
-# user_crud = CRUDUser()
+user_crud = CRUDUser()

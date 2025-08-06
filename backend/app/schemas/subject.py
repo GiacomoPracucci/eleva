@@ -9,7 +9,7 @@ class SubjectBase(BaseModel):
     academic_year: Optional[str] = None
     level: Optional[str] = None
     category: Optional[str] = None
-    color: Optional[str] = Field(None, regex="^#[0-9A-Fa-f]{6}$")
+    color: Optional[str] = Field(None, pattern="^#[0-9A-Fa-f]{6}$")
     icon: Optional[str] = None
 
 
@@ -23,7 +23,7 @@ class SubjectUpdate(BaseModel):
     academic_year: Optional[str] = None
     level: Optional[str] = None
     category: Optional[str] = None
-    color: Optional[str] = Field(None, regex="^#[0-9A-Fa-f]{6}$")
+    color: Optional[str] = Field(None, pattern="^#[0-9A-Fa-f]{6}$")
     icon: Optional[str] = None
     is_active: Optional[bool] = None
     is_archived: Optional[bool] = None

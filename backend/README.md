@@ -22,7 +22,7 @@ This document describes the architectural decisions and implementation patterns 
 ## FastAPI - API Framework
 
 ### Core Concept
-FastAPI is a modern Python web framework that automatically generates API documentation and provides type hints support. It's built on Starlette (for web parts) and Pydantic (for data parts).
+FastAPI is a modern, fast (high-performance), web framework for building APIs with Python based on standard Python type hints. It's built on Starlette (for web parts) and Pydantic (for data parts).
 
 ### Implementation Logic
 
