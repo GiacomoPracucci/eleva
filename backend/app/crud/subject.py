@@ -1,8 +1,8 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import Optional, List
 from app.models.subject import Subject
 from app.schemas.subject import SubjectCreate, SubjectUpdate
-
 
 class CRUDSubject:
     """
@@ -12,21 +12,24 @@ class CRUDSubject:
     clear and reusable interface that separates data access from business logic
     in the API layer.
     """
-    def get(self, db: Session, subject_id: int) -> Optional[Subject]:
+    async def get(self, db: AsyncSession, subject_id: int) -> Optional[Subject]:
         """
         Retrieves a single subject by its unique ID.
 
         Args:
-            db (Session): The database session.
+            db (AsyncSession): The database session.
             subject_id (int): The ID of the subject to retrieve.
 
         Returns:
             Optional[Subject]: The Subject object if found, otherwise None.
         """
-        return db.query(Subject).filter(Subject.id == subject_id).first()
+        result = await db.execute(
+            select(Subject).filter(Subject.id == subject_id)
+        )
+        return result.scalar_one_or_none()
     
-    def get_by_owner(
-        self, db: Session, owner_id: int, skip: int = 0, limit: int = 100,
+    async def get_by_owner(
+        self, db: AsyncSession, owner_id: int, skip: int = 0, limit: int = 100,
         include_archived: bool = False
     ) -> List[Subject]:
         """
@@ -36,7 +39,7 @@ class CRUDSubject:
         overridden by setting the `include_archived` flag to True.
 
         Args:
-            db (Session): The database session.
+            db (AsyncSession): The database session.
             owner_id (int): The ID of the user whose subjects are to be retrieved.
             skip (int): The number of records to skip for pagination. Defaults to 0.
             limit (int): The maximum number of records to return. Defaults to 100.
@@ -46,12 +49,15 @@ class CRUDSubject:
         Returns:
             List[Subject]: A list of Subject objects owned by the specified user.
         """
-        query = db.query(Subject).filter(Subject.owner_id == owner_id)
+        query = select(Subject).filter(Subject.owner_id == owner_id)
         if not include_archived:
             query = query.filter(Subject.is_archived == False)
-        return query.offset(skip).limit(limit).all()
+        query = query.offset(skip).limit(limit)
+        
+        result = await db.execute(query)
+        return result.scalars().all()
     
-    def create(self, db: Session, obj_in: SubjectCreate, owner_id: int) -> Subject:
+    async def create(self, db: AsyncSession, obj_in: SubjectCreate, owner_id: int) -> Subject:
         """
         Creates a new subject for a specific user.
 
@@ -60,7 +66,7 @@ class CRUDSubject:
         committed to the database.
 
         Args:
-            db (Session): The database session.
+            db (AsyncSession): The database session.
             obj_in (SubjectCreate): A Pydantic schema with the new subject's data.
             owner_id (int): The ID of the user who will own this subject.
 
@@ -69,11 +75,11 @@ class CRUDSubject:
         """
         db_obj = Subject(**obj_in.model_dump(), owner_id=owner_id)
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
         return db_obj
     
-    def update(self, db: Session, db_obj: Subject, obj_in: SubjectUpdate) -> Subject:
+    async def update(self, db: AsyncSession, db_obj: Subject, obj_in: SubjectUpdate) -> Subject:
         """
         Updates an existing subject's information.
 
@@ -82,7 +88,7 @@ class CRUDSubject:
         existing data unintentionally.
 
         Args:
-            db (Session): The database session.
+            db (AsyncSession): The database session.
             db_obj (Subject): The existing Subject object to be updated.
             obj_in (SubjectUpdate): A Pydantic schema with the fields to update.
 
@@ -93,23 +99,23 @@ class CRUDSubject:
         for field, value in update_data.items():
             setattr(db_obj, field, value)
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
         return db_obj
     
-    def delete(self, db: Session, db_obj: Subject) -> Subject:
+    async def delete(self, db: AsyncSession, db_obj: Subject) -> Subject:
         """
         Deletes a subject from the database.
 
         Args:
-            db (Session): The database session.
+            db (AsyncSession): The database session.
             db_obj (Subject): The Subject object to be deleted.
 
         Returns:
             Subject: The Subject object that was just deleted.
         """
-        db.delete(db_obj)
-        db.commit()
+        await db.delete(db_obj)
+        await db.commit()
         return db_obj
     
     def is_owner(self, db_obj: Subject, user_id: int) -> bool:

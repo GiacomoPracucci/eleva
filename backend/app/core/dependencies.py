@@ -1,37 +1,34 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
-from jose import JWTError, jwt
-from app.db.session import SessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from typing import AsyncGenerator
+from app.db.session import AsyncSessionLocal
 from app.core.config import settings
 from app.core.security import decode_token
 from app.models.user import User
-from app.schemas.auth import TokenData
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
-
-def get_db():
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    A dependency function to get a database session.
-
-    This is a generator function that creates a new SQLAlchemy `SessionLocal` for each
-    incoming request. It yields the session to the path operation function and
-    ensures that the session is always closed after the request is finished,
-    even if an error occurs. This pattern prevents database session leaks.
-
+    A dependency function to get an async database session.
+    
+    This is an async generator that creates a new AsyncSession for each
+    incoming request and ensures proper cleanup.
+    
     Yields:
-        Session: The SQLAlchemy database session.
+        AsyncSession: The SQLAlchemy async database session.
     """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 
 async def get_current_user(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     token: str = Depends(oauth2_scheme)
 ) -> User:
     """
@@ -69,7 +66,9 @@ async def get_current_user(
     if user_id is None:
         raise credentials_exception
     
-    user = db.query(User).filter(User.id == user_id).first()
+    result = await db.execute(select(User).filter(User.id == user_id))
+    user = result.scalar_one_or_none()
+
     if user is None:
         raise credentials_exception
     

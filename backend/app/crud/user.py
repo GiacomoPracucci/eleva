@@ -1,5 +1,5 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, or_
 from typing import Optional, List
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
@@ -13,7 +13,7 @@ class CRUDUser:
     This class abstracts the database interaction logic away from the API endpoints,
     providing a clear and reusable interface for managing users in the database.
     """
-    def get(self, db: Session, user_id: int) -> Optional[User]:
+    async def get(self, db: AsyncSession, user_id: int) -> Optional[User]:
         """
         Retrieves a single user by their unique ID.
 
@@ -24,9 +24,10 @@ class CRUDUser:
         Returns:
             Optional[User]: The User object if found, otherwise None.
         """
-        return db.query(User).filter(User.id == user_id).first()
+        result = await db.execute(select(User).filter(User.id == user_id))
+        return result.scalar_one_or_none()
     
-    def get_by_email(self, db: Session, email: str) -> Optional[User]:
+    async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
         """
         Retrieves a single user by their email address.
 
@@ -37,22 +38,24 @@ class CRUDUser:
         Returns:
             Optional[User]: The User object if found, otherwise None.
         """
-        return db.query(User).filter(User.email == email).first()
+        result = await db.execute(select(User).filter(User.email == email))
+        return result.scalar_one_or_none()
     
-    def get_by_username(self, db: Session, username: str) -> Optional[User]:
+    async def get_by_username(self, db: AsyncSession, username: str) -> Optional[User]:
         """
-    Retrieves a single user by their username.
+        Retrieves a single user by their username.
 
-    Args:
-        db (Session): The database session.
-        username (str): The username of the user to retrieve.
+        Args:
+            db (Session): The database session.
+            username (str): The username of the user to retrieve.
 
-    Returns:
-        Optional[User]: The User object if found, otherwise None.
-    """
-        return db.query(User).filter(User.username == username).first()
+        Returns:
+            Optional[User]: The User object if found, otherwise None.
+        """
+        result = await db.execute(select(User).filter(User.username == username))
+        return result.scalar_one_or_none()
     
-    def get_by_email_or_username(self, db: Session, login: str) -> Optional[User]:
+    async def get_by_email_or_username(self, db: AsyncSession, login: str) -> Optional[User]:
         """
         Retrieves a single user by either their email or username.
 
@@ -66,25 +69,31 @@ class CRUDUser:
         Returns:
             Optional[User]: The User object if found, otherwise None.
         """
-        return db.query(User).filter(
-            or_(User.email == login, User.username == login)
-        ).first()
+        result = await db.execute(
+            select(User).filter(
+                or_(User.email == login, User.username == login)
+            )
+        )
+        return result.scalar_one_or_none()
     
-    def get_multi(self, db: Session, skip: int = 0, limit: int = 100) -> List[User]:
+    async def get_multi(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> List[User]:
         """
-    Retrieves a list of users with pagination.
+        Retrieves a list of users with pagination.
 
-    Args:
-        db (Session): The database session.
-        skip (int): The number of records to skip. Defaults to 0.
-        limit (int): The maximum number of records to return. Defaults to 100.
+        Args:
+            db (Session): The database session.
+            skip (int): The number of records to skip. Defaults to 0.
+            limit (int): The maximum number of records to return. Defaults to 100.
 
-    Returns:
-        List[User]: A list of User objects.
-    """
-        return db.query(User).offset(skip).limit(limit).all()
+        Returns:
+            List[User]: A list of User objects.
+        """
+        result = await db.execute(
+            select(User).offset(skip).limit(limit)
+        )
+        return result.scalars().all()
     
-    def create(self, db: Session, obj_in: UserCreate) -> User:
+    async def create(self, db: AsyncSession, obj_in: UserCreate) -> User:
         """
         Creates a new user in the database.
 
@@ -110,11 +119,11 @@ class CRUDUser:
             allow_ai_training=obj_in.allow_ai_training
         )
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
         return db_obj
     
-    def update(self, db: Session, db_obj: User, obj_in: UserUpdate) -> User:
+    async def update(self, db: AsyncSession, db_obj: User, obj_in: UserUpdate) -> User:
         """
         Updates an existing user's information in the database.
 
@@ -134,11 +143,11 @@ class CRUDUser:
         for field, value in update_data.items():
             setattr(db_obj, field, value)
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
         return db_obj
     
-    def authenticate(self, db: Session, username: str, password: str) -> Optional[User]:
+    async def authenticate(self, db: AsyncSession, username: str, password: str) -> Optional[User]:
         """
         Authenticates a user by checking their credentials.
 
@@ -154,7 +163,7 @@ class CRUDUser:
             Optional[User]: The authenticated User object if credentials are correct,
                             otherwise None.
         """
-        user = self.get_by_email_or_username(db, username)
+        user = await self.get_by_email_or_username(db, username)
         if not user:
             return None
         if not verify_password(password, user.hashed_password):

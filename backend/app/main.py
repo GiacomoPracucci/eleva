@@ -1,20 +1,41 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.api.router import api_router
 from app.db.base import Base
 from app.db.session import engine
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+async def init_db():
+    """Initialize database tables"""
+    async with engine.begin() as conn:
+        # Create all tables
+        await conn.run_sync(Base.metadata.create_all)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Async context manager for app lifespan events.
+    Replaces the old @app.on_event decorators.
+    """
+    # Startup
+    await init_db()
+    print(f"{settings.PROJECT_NAME} started successfully")
+    
+    yield
+    
+    # Shutdown
+    await engine.dispose()
+    print(f"{settings.PROJECT_NAME} shutting down")
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan  
 )
 
-# Set up CORS
 if settings.BACKEND_CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
@@ -24,15 +45,14 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
-# Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")
-def root():
+async def root():
     return {"message": f"Welcome to {settings.PROJECT_NAME}"}
 
 
 @app.get("/health")
-def health_check():
+async def health_check():
     return {"status": "healthy"}
