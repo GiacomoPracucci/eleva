@@ -50,7 +50,7 @@ if settings.DATABASE_URL.startswith("postgresql://"):
 
 engine = create_async_engine(
     url=settings.DATABASE_URL,
-    echo=True,
+    echo=False,
     future=True,
     pool_pre_ping=True,
     pool_size=10,
