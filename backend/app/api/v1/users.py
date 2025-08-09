@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from app.core.dependencies import get_db, get_current_active_user
 from app.crud.user import user_crud
@@ -11,11 +11,12 @@ import io
 import uuid
 from app.core.config import settings
 
+
 router = APIRouter()
 
 
 @router.get("/me", response_model=User)
-def read_current_user(
+async def read_current_user(
     current_user: UserModel = Depends(get_current_active_user)
 ):
     """Get current user profile"""
@@ -23,20 +24,20 @@ def read_current_user(
 
 
 @router.put("/me", response_model=User)
-def update_current_user(
+async def update_current_user(
     user_update: UserUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
     """Update current user profile"""
-    user = user_crud.update(db, db_obj=current_user, obj_in=user_update)
+    user = await user_crud.update(db, db_obj=current_user, obj_in=user_update)
     return user
 
 
 @router.post("/me/profile-picture", response_model=User)
 async def upload_profile_picture(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
     """Upload user profile picture"""
@@ -84,8 +85,8 @@ async def upload_profile_picture(
         # Update user profile picture URL
         current_user.profile_picture_url = profile_picture_url
         db.add(current_user)
-        db.commit()
-        db.refresh(current_user)
+        await db.commit()
+        await db.refresh(current_user)
         
         return current_user
     except Exception as e:
@@ -93,8 +94,8 @@ async def upload_profile_picture(
 
 
 @router.delete("/me/profile-picture", response_model=User)
-def delete_profile_picture(
-    db: Session = Depends(get_db),
+async def delete_profile_picture(
+    db: AsyncSession = Depends(get_db),
     current_user: UserModel = Depends(get_current_active_user)
 ):
     """Delete user profile picture"""
@@ -121,7 +122,7 @@ def delete_profile_picture(
         # Remove URL from database
         current_user.profile_picture_url = None
         db.add(current_user)
-        db.commit()
-        db.refresh(current_user)
+        await db.commit()
+        await db.refresh(current_user)
     
     return current_user
