@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 if settings.DATABASE_URL.startswith("postgresql://"):
     logger.warning("The DATABASE_URL provided does not contain ‘asyncpg’. It will be added automatically.")
-    settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    settings.DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
 
 engine = create_async_engine(
     url=settings.DATABASE_URL,

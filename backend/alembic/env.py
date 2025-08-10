@@ -26,7 +26,7 @@ config = context.config
 # Convert the database URL to async version+
 if settings.DATABASE_URL.startswith("postgresql://"):
     logger.warning("The DATABASE_URL provided does not contain ‘asyncpg’. It will be added automatically.")
-    settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    settings.DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
 
 # Set the database URL from settings
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
