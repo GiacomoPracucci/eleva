@@ -39,6 +39,9 @@ async def get_current_user(
     verifies that it is an "access" token, extracts the user identifier ("sub" claim),
     and retrieves the corresponding user object from the database.
 
+    Note: JWT 'sub' claim is always a string per JWT standard, 
+    but our database uses integer IDs, so we convert here.
+
     Args:
         db (Session): The database session, injected by the `get_db` dependency.
         token (str): The OAuth2 bearer token, automatically extracted from the
@@ -62,15 +65,17 @@ async def get_current_user(
     if payload is None or payload.get("type") != "access":
         raise credentials_exception
     
-    user_id: int = payload.get("sub")
-    if user_id is None:
+    # Extract user ID from 'sub' claim
+    # JWT standard requires 'sub' to be a string, so we convert to int for DB query
+    user_id_str = payload.get("sub")
+    if not user_id_str:
         raise credentials_exception
     
-    if isinstance(user_id, str):
-        try:
-            user_id = int(user_id)
-        except (ValueError, TypeError):
-            raise credentials_exception
+    try:
+        user_id = int(user_id_str)
+    except (ValueError, TypeError):
+        # Invalid user ID format in token
+        raise credentials_exception
 
     result = await db.execute(select(User).filter(User.id == user_id))
     user = result.scalar_one_or_none()

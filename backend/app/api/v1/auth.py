@@ -50,6 +50,7 @@ async def login(
     if not user_crud.is_active(user):
         raise HTTPException(status_code=400, detail="Inactive user")
     
+    # convert user.id to string for JWT consistency
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
@@ -81,6 +82,7 @@ async def refresh_token(
             detail="User not found"
         )
     
+    # convert user.id to string for JWT consistency
     access_token = create_access_token(data={"sub": str(user.id)})
     new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
