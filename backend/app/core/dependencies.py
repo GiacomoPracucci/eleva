@@ -66,6 +66,12 @@ async def get_current_user(
     if user_id is None:
         raise credentials_exception
     
+    if isinstance(user_id, str):
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            raise credentials_exception
+
     result = await db.execute(select(User).filter(User.id == user_id))
     user = result.scalar_one_or_none()
 

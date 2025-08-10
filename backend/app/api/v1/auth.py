@@ -50,8 +50,8 @@ async def login(
     if not user_crud.is_active(user):
         raise HTTPException(status_code=400, detail="Inactive user")
     
-    access_token = create_access_token(data={"sub": user.id})
-    refresh_token = create_refresh_token(data={"sub": user.id})
+    access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
     return {
         "access_token": access_token,
@@ -81,8 +81,8 @@ async def refresh_token(
             detail="User not found"
         )
     
-    access_token = create_access_token(data={"sub": user.id})
-    new_refresh_token = create_refresh_token(data={"sub": user.id})
+    access_token = create_access_token(data={"sub": str(user.id)})
+    new_refresh_token = create_refresh_token(data={"sub": (user.id)})
     
     return {
         "access_token": access_token,

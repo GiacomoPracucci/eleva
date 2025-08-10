@@ -44,12 +44,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-if settings.DATABASE_URL.startswith("postgresql://"):
-    logger.warning("The DATABASE_URL provided does not contain ‘asyncpg’. It will be added automatically.")
-    settings.DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+database_url = settings.DATABASE_URL
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    logger.info("Converted DATABASE_URL to use asyncpg driver")
 
 engine = create_async_engine(
-    url=settings.DATABASE_URL,
+    url=database_url,
     echo=False,
     future=True,
     pool_pre_ping=True,

@@ -60,7 +60,7 @@ async def update_subject(
     current_user: UserModel = Depends(get_current_active_user)
 ):
     """Update a subject"""
-    await subject = subject_crud.get(db, subject_id=subject_id)
+    subject = await subject_crud.get(db, subject_id=subject_id)
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
     if not subject_crud.is_owner(subject, current_user.id):

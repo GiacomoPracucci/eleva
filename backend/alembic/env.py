@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 sys.path.append(str(Path(__file__).parent.parent))
 
 from app.core.config import settings
-from app.db.base import Base
+from app.db import Base
 
 # Import all models to ensure they're registered
 from app.models.user import User
@@ -24,12 +24,13 @@ from app.models.subject import Subject
 config = context.config
 
 # Convert the database URL to async version+
-if settings.DATABASE_URL.startswith("postgresql://"):
-    logger.warning("The DATABASE_URL provided does not contain ‘asyncpg’. It will be added automatically.")
-    settings.DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+database_url = settings.DATABASE_URL
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    logger.info("Converted DATABASE_URL to use asyncpg driver")
 
 # Set the database URL from settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
