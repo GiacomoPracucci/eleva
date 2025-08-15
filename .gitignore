@@ -10,7 +10,7 @@ backend/.env
 ehthumbs.db
 Thumbs.db
 
-
+frontednd/node_modules/
 test.py**
 
 # Byte-compiled / optimized / DLL files
