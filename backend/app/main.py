@@ -37,10 +37,16 @@ app = FastAPI(
     lifespan=lifespan  
 )
 
+print(f"CORS Origins from settings: {settings.BACKEND_CORS_ORIGINS}")
+print(f"Type: {type(settings.BACKEND_CORS_ORIGINS)}")
+
 if settings.BACKEND_CORS_ORIGINS:
+    cors_origins = [str(origin).rstrip('/') for origin in settings.BACKEND_CORS_ORIGINS]
+    print(f"CORS enabled for: {cors_origins}")
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
+        allow_origins=["*"], #[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

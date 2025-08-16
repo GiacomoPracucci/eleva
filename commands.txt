@@ -1,4 +1,5 @@
 eval $(poetry env activate) # attivare ambiente virtuale poetry
+uvicorn app.main:app --reload # lacniare backend
 npm run dev # lanciare server vite
 mkdir -p components/common components/auth components/subjects components/layout
 mkdir -p pages services hooks store types utils contexts
