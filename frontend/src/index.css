@@ -1,43 +1,76 @@
-/* Font personalizzato - DEVE essere prima di tailwindcss */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-/* Importa Tailwind CSS v4 */
-@import "tailwindcss";
-/* 
- * Con Tailwind v4, puoi personalizzare direttamente qui in CSS!
- * Nessun file di configurazione JavaScript necessario.
+/**
+ * @file This is the main stylesheet for the Eléva application.
+ * It handles the import of custom fonts and Tailwind CSS, defines the global theme,
+ * creates custom utility components, and applies base styles.
+ * This file leverages modern Tailwind CSS v4 features like @theme and @utility.
  */
 
-/* Personalizzazione del tema */
+/* ===================================================================================
+ * IMPORTS
+ * =================================================================================== */
+
+/**
+ * Import the 'Inter' font from Google Fonts.
+ * This MUST be placed before the Tailwind CSS import to ensure it's available
+ * when Tailwind builds its font utilities.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/**
+ * Import Tailwind CSS v4.
+ * This single import brings in all of Tailwind's base styles, components, and utilities.
+ */
+@import "tailwindcss";
+
+/* ===================================================================================
+ * THEME CUSTOMIZATION (@theme)
+ * With Tailwind v4, the theme can be customized directly in CSS using the @theme at-rule,
+ * eliminating the need for a separate `tailwind.config.js` file for many use cases.
+ * =================================================================================== */
+
+
 @theme {
-  /* Colori personalizzati per Eléva */
+  /** Custom brand colors specific to the Eléva application. */
   --color-eleva-blue: #3b82f6;
   --color-eleva-purple: #8b5cf6;
   --color-eleva-teal: #14b8a6;
   
-  /* Spacing personalizzato se necessario */
+  /** Custom spacing units, useful for maintaining a consistent layout scale. */
   --spacing-18: 4.5rem;
   --spacing-22: 5.5rem;
   
-  /* Font */
+  /**
+   * Define the default font family for the application.
+   * 'Inter' is the primary font, with system-ui and sans-serif as fallbacks.
+   */
   --font-family-sans: 'Inter', system-ui, sans-serif;
 }
 
-/* Componenti personalizzati usando @utility */
+/* ===================================================================================
+ * CUSTOM UTILITIES (@utility)
+ * The @utility at-rule allows the creation of new, reusable utility classes
+ * by composing existing Tailwind utilities with `@apply`. This is perfect for
+ * creating component-like classes such as buttons, inputs, and cards.
+ * =================================================================================== */
+
+/** A base button style. This class should be extended by more specific button variants. */
 @utility btn {
   @apply inline-flex items-center justify-center rounded-md text-sm font-medium 
          transition-colors focus-visible:outline-none focus-visible:ring-2 
          focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none;
 }
 
+/** The primary action button style. It extends the base `btn` utility. */
 @utility btn-primary {
   @apply btn bg-blue-600 text-white hover:bg-blue-700 px-4 py-2;
 }
 
+/** A secondary button style for less prominent actions. */
 @utility btn-secondary {
   @apply btn bg-gray-100 text-gray-900 hover:bg-gray-200 px-4 py-2;
 }
 
+/** A consistent style for all text input fields. */
 @utility input-field {
   @apply flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 
          text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 
@@ -45,11 +78,16 @@
          disabled:cursor-not-allowed disabled:opacity-50;
 }
 
+/** A standard card style for wrapping content sections. */
 @utility card {
   @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
 }
 
-/* Animazioni personalizzate */
+/* ===================================================================================
+ * CUSTOM ANIMATIONS
+ * =================================================================================== */
+
+/** Defines the keyframes for a simple slide-up and fade-in animation. */
 @keyframes slide-up {
   from {
     transform: translateY(10px);
@@ -61,17 +99,27 @@
   }
 }
 
+/** A utility class to easily apply the `slide-up` animation. */
 @utility animate-slide-up {
   animation: slide-up 0.3s ease-out;
 }
 
-/* Stili globali */
+/* ===================================================================================
+ * GLOBAL STYLES
+ * =================================================================================== */
+
+/** Base styles applied to the <body> tag. */
 body {
   font-family: var(--font-family-sans);
   @apply bg-gray-50 text-gray-900 antialiased;
 }
 
-/* Scrollbar personalizzata */
+/* ===================================================================================
+ * CUSTOM SCROLLBAR
+ * Styles the browser scrollbar for a more consistent look and feel across the app.
+ * Note: This uses non-standard `::-webkit-` pseudo-elements, which work in
+ * WebKit-based browsers like Chrome, Safari, and Edge.
+ * =================================================================================== */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
