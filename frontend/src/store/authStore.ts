@@ -35,6 +35,15 @@ interface AuthState {
   checkAuth: () => Promise<void>;
   /** Action to manually clear any existing error messages. */
   clearError: () => void;
+  /** 
+   * Action to update the user data in the store.
+   * This is useful when the user updates their profile or when we need to refresh user data.
+   * 
+   * Design decision: We expose this action to allow components to update user data
+   * after successful API calls without having to re-fetch the entire user object.
+   * This improves performance and provides immediate UI feedback.
+   */
+  setUser: (user: User) => void;
 }
 
 /**
@@ -163,4 +172,11 @@ export const useAuthStore = create<AuthState>((set) => ({
    * A simple utility action to clear the error state.
    */
   clearError: () => set({ error: null }),
+
+  /**
+   * Updates the user data in the store.
+   * 
+   * @param user - The updated user object to store
+   */
+  setUser: (user) => set({ user }),
 }));
