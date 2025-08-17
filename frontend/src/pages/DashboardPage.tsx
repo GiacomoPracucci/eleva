@@ -1,10 +1,25 @@
-// ===== pages/DashboardPage.tsx =====
+/**
+ * @file This file defines the DashboardPage component, which serves as the main
+ * landing page for authenticated users, providing a summary of their activity.
+ */
+
+// our custom hook to interact with our global authentication state (Zustand).
 import { useAuthStore } from '@/store/authStore';
+// Icons from the lucide-react library for a clean UI.
 import { BookOpen, Clock, TrendingUp, Target } from 'lucide-react';
 
+/**
+ * The DashboardPage component is the user's main hub after logging in.
+ * It provides a personalized welcome, a grid of key statistics, and quick
+ * access to common actions. Currently, it displays static placeholder data.
+ */
 export const DashboardPage = () => {
+  // Destructure the `user` object from the global store to display personalized content.
   const { user } = useAuthStore();
 
+  // This array acts as a configuration for the stats grid.
+  // Using a configuration array like this makes the UI modular and easy to update.
+  // You can add or remove stats here without changing the JSX logic.
   const stats = [
     { label: 'Active Subjects', value: '0', icon: BookOpen, color: 'bg-blue-500' },
     { label: 'Study Hours', value: '0', icon: Clock, color: 'bg-green-500' },
@@ -14,7 +29,7 @@ export const DashboardPage = () => {
 
   return (
     <div>
-      {/* Welcome Section */}
+      {/* Welcome Section: Greets the user with their name. */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
           Welcome back, {user?.full_name || user?.username}! 👋
@@ -24,9 +39,12 @@ export const DashboardPage = () => {
         </p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid: Dynamically renders stat cards from the `stats` array. */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* We map over the `stats` array to create a card for each object. */}
         {stats.map((stat) => {
+          // It's a common pattern in React to assign the icon component to a variable
+          // with a capitalized name (e.g., `Icon`) so it can be rendered as a component (`<Icon />`).
           const Icon = stat.icon;
           return (
             <div key={stat.label} className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
@@ -42,7 +60,8 @@ export const DashboardPage = () => {
         })}
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions: Provides easy access to key features. */}
+      {/* NOTE: These buttons are placeholders and need `onClick` handlers to be functional. */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -60,38 +79,6 @@ export const DashboardPage = () => {
             <Target className="w-8 h-8 text-purple-600 mb-2" />
             <h3 className="font-medium text-gray-900">Set Goals</h3>
             <p className="text-sm text-gray-600">Define your learning objectives</p>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ===== pages/SubjectsPage.tsx =====
-import { Plus } from 'lucide-react';
-
-export const SubjectsPage = () => {
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">My Subjects</h1>
-        <button className="btn-primary inline-flex items-center">
-          <Plus className="w-5 h-5 mr-2" />
-          Add Subject
-        </button>
-      </div>
-
-      {/* Empty state */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12">
-        <div className="text-center">
-          <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">No subjects yet</h2>
-          <p className="text-gray-600 mb-6">
-            Start by adding your first subject to track your learning progress
-          </p>
-          <button className="btn-primary inline-flex items-center">
-            <Plus className="w-5 h-5 mr-2" />
-            Add Your First Subject
           </button>
         </div>
       </div>

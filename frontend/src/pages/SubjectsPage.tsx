@@ -1,5 +1,14 @@
+/**
+ * @file This file defines the SubjectsPage, a full-featured component for managing
+ * a user's academic subjects. It handles all CRUD (Create, Read, Update, Delete)
+ * operations, including fetching, creating, editing, deleting, and archiving subjects.
+ */
+
+// React's core hooks for managing state and side effects.
 import { useState, useEffect } from 'react';
+// The primary hook from React Hook Form to manage form state and validation.
 import { useForm } from 'react-hook-form';
+// A comprehensive set of icons from the lucide-react library.
 import { 
   Plus, 
   BookOpen, 
@@ -12,11 +21,17 @@ import {
   MoreVertical,
   GraduationCap
 } from 'lucide-react';
+// A utility to conditionally join CSS class names together.
 import clsx from 'clsx';
+// The configured Axios instance for making API calls.
 import api from '@/services/api';
+// TypeScript types defining the shape of subject data.
 import { Subject, SubjectCreate } from '@/types';
 
-// Colori predefiniti per i subjects
+// ===================================================================================
+// CONSTANTS
+// These constants provide predefined options for the user when creating a subject.
+// ===================================================================================
 const COLORS = [
   '#3B82F6', // blue
   '#8B5CF6', // purple
@@ -28,7 +43,7 @@ const COLORS = [
   '#EF4444', // red
 ];
 
-// Icone disponibili
+/** A list of available icons (emojis) for subject representation. */
 const ICONS = [
   { name: 'book', icon: '📚' },
   { name: 'math', icon: '🔢' },
@@ -40,7 +55,16 @@ const ICONS = [
   { name: 'sport', icon: '⚽' },
 ];
 
+/**
+ * The SubjectsPage component provides a complete interface for managing subjects.
+ * It features a grid display of subjects, a modal for creation and editing,
+ * and functionality for archiving and deleting.
+ */
 const SubjectsPage = () => {
+  // ===================================================================================
+  // STATE MANAGEMENT
+  // All component-level state is managed here using React's `useState` hook.
+  // ===================================================================================
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -49,6 +73,10 @@ const SubjectsPage = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ===================================================================================
+  // FORM MANAGEMENT
+  // `react-hook-form` is used for robust and performant form handling.
+  // ===================================================================================
   const {
     register,
     handleSubmit,
@@ -58,15 +86,23 @@ const SubjectsPage = () => {
     formState: { errors, isSubmitting },
   } = useForm<SubjectCreate>();
 
+  // We "watch" these fields to update the UI in real-time as the user selects them.
   const selectedColor = watch('color') || COLORS[0];
   const selectedIcon = watch('icon') || ICONS[0].name;
 
-  // Carica i subjects all'avvio
+  // ===================================================================================
+  // DATA FETCHING & SIDE EFFECTS
+  // `useEffect` is used to fetch data when the component mounts or dependencies change.
+  // ===================================================================================
+
+  // This effect triggers the data fetching process whenever the `showArchived` filter changes.
   useEffect(() => {
     fetchSubjects();
   }, [showArchived]);
 
-  // Funzione per caricare i subjects
+  /**
+   * Fetches the list of subjects from the API based on the current filter settings.
+   */
   const fetchSubjects = async () => {
     setIsLoading(true);
     try {
@@ -74,7 +110,7 @@ const SubjectsPage = () => {
         params: { include_archived: showArchived }
       });
       setSubjects(response.data);
-      setError(null);
+      setError(null); // Clear previous errors on success
     } catch (error: any) {
       setError('Failed to load subjects');
       console.error('Error fetching subjects:', error);
@@ -83,15 +119,24 @@ const SubjectsPage = () => {
     }
   };
 
-  // Apri modal per nuovo subject o modifica
+  // ===================================================================================
+  // EVENT HANDLERS & LOGIC
+  // These functions handle user interactions and API mutations (Create, Update, Delete).
+  // ===================================================================================
+
+  /**
+   * Opens the modal for either creating a new subject or editing an existing one.
+   * @param subject - (Optional) The subject to be edited. If not provided, the modal opens in "create" mode.
+   */
   const openModal = (subject?: Subject) => {
     if (subject) {
+      // "Edit" mode: Set the subject to be edited and populate the form fields.
       setEditingSubject(subject);
-      // Popola il form con i dati esistenti
       Object.keys(subject).forEach((key) => {
         setValue(key as any, (subject as any)[key]);
       });
     } else {
+      // "Create" mode: Clear any editing state and reset the form with default values.
       setEditingSubject(null);
       reset({
         color: COLORS[0],
@@ -101,28 +146,33 @@ const SubjectsPage = () => {
     setIsModalOpen(true);
   };
 
-  // Chiudi modal
+  /** Closes the modal and resets all related state. */
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingSubject(null);
     reset();
   };
 
-  // Submit del form
+  /**
+   * Handles the form submission for both creating and updating subjects.
+   * @param data - The validated form data.
+   */
   const onSubmit = async (data: SubjectCreate) => {
     try {
       if (editingSubject) {
-        // Update
+        // Update logic: Send a PUT request to the specific subject's endpoint.
         const response = await api.put<Subject>(
           `/subjects/${editingSubject.id}`,
           data
         );
+        // Update the local state optimistically to reflect the change immediately.
         setSubjects(subjects.map(s => 
           s.id === editingSubject.id ? response.data : s
         ));
       } else {
-        // Create
+        // Create logic: Send a POST request to create a new subject.
         const response = await api.post<Subject>('/subjects', data);
+        // Add the new subject to the local state.
         setSubjects([...subjects, response.data]);
       }
       closeModal();
@@ -132,15 +182,21 @@ const SubjectsPage = () => {
     }
   };
 
-  // Elimina subject
+  /**
+   * Deletes a subject after user confirmation.
+   * @param id - The ID of the subject to delete.
+   */
   const deleteSubject = async (id: number) => {
+    // A simple `window.confirm` is used here for confirmation. In a real app,
+    // a custom confirmation modal would provide a better user experience.
     if (!window.confirm('Are you sure you want to delete this subject?')) {
       return;
     }
 
-    setDeletingSubjectId(id);
+    setDeletingSubjectId(id); // Used to disable the delete button during the API call.
     try {
       await api.delete(`/subjects/${id}`);
+      // Remove the deleted subject from the local state.
       setSubjects(subjects.filter(s => s.id !== id));
     } catch (error: any) {
       console.error('Error deleting subject:', error);
@@ -150,13 +206,17 @@ const SubjectsPage = () => {
     }
   };
 
-  // Toggle archive status
+  /**
+   * Toggles the `is_archived` status of a subject.
+   * @param subject - The subject to archive or unarchive.
+   */
   const toggleArchive = async (subject: Subject) => {
     try {
       const response = await api.put<Subject>(
         `/subjects/${subject.id}`,
         { is_archived: !subject.is_archived }
       );
+      // Update the local state to reflect the change.
       setSubjects(subjects.map(s => 
         s.id === subject.id ? response.data : s
       ));
@@ -166,7 +226,16 @@ const SubjectsPage = () => {
     }
   };
 
-  // Componente Card del Subject
+  // ===================================================================================
+  // SUB-COMPONENTS
+  // Breaking down the UI into smaller components makes the code more readable and reusable.
+  // ===================================================================================
+
+  /**
+   * A presentational component that renders a single subject card.
+   * @param {object} props - The component props.
+   * @param {Subject} props.subject - The subject data to display.
+   */
   const SubjectCard = ({ subject }: { subject: Subject }) => {
     const [showMenu, setShowMenu] = useState(false);
     const icon = ICONS.find(i => i.name === subject.icon)?.icon || '📚';
@@ -179,7 +248,7 @@ const SubjectsPage = () => {
         )}
         style={{ borderColor: subject.color || '#e5e7eb' }}
       >
-        {/* Menu dropdown */}
+        {/* Dropdown menu for actions */}
         <div className="absolute top-4 right-4">
           <button
             onClick={() => setShowMenu(!showMenu)}
@@ -224,7 +293,7 @@ const SubjectsPage = () => {
           )}
         </div>
 
-        {/* Subject content */}
+        {/* Main card content */}
         <div className="flex items-start space-x-4">
           <div 
             className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
@@ -241,6 +310,7 @@ const SubjectsPage = () => {
                 {subject.description}
               </p>
             )}
+            {/* Metadata tags */}
             <div className="flex flex-wrap gap-2 mt-3">
               {subject.level && (
                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700">
@@ -267,9 +337,14 @@ const SubjectsPage = () => {
     );
   };
 
+  // ===================================================================================
+  // MAIN RENDER
+  // The final JSX output of the component, with conditional rendering for different states.
+  // ===================================================================================
+
   return (
     <div>
-      {/* Header */}
+      {/* Page Header with title and primary actions */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">My Subjects</h1>
@@ -300,14 +375,14 @@ const SubjectsPage = () => {
         </div>
       </div>
 
-      {/* Error message */}
+      {/* Global Error Display */}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
           {error}
         </div>
       )}
 
-      {/* Loading state */}
+      {/* Conditional Rendering: Shows a loader, an empty state, or the subjects grid. */}
       {isLoading ? (
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -345,10 +420,11 @@ const SubjectsPage = () => {
         </div>
       )}
 
-      {/* Modal for Create/Edit */}
+      {/* Create/Edit Modal: Rendered conditionally based on `isModalOpen` state. */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
             <div className="p-6 border-b border-gray-200">
               <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-900">
@@ -362,9 +438,9 @@ const SubjectsPage = () => {
                 </button>
               </div>
             </div>
-
+            {/* Modal Form */}
             <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-              {/* Name */}
+              {/* Form fields are registered here */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Subject Name *
@@ -437,7 +513,7 @@ const SubjectsPage = () => {
                 </select>
               </div>
 
-              {/* Color */}
+              {/* Custom color picker */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Color Theme
@@ -460,7 +536,7 @@ const SubjectsPage = () => {
                 </div>
               </div>
 
-              {/* Icon */}
+              {/* Custom icon picker */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Icon
@@ -484,7 +560,7 @@ const SubjectsPage = () => {
                 </div>
               </div>
 
-              {/* Actions */}
+              {/* Modal Actions */}
               <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
