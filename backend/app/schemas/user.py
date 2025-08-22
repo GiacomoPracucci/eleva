@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional
 from datetime import datetime
+from app.models.user import UserRole
 
 
 class UserBase(BaseModel):
@@ -27,6 +28,7 @@ class UserUpdate(BaseModel):
 
 class UserInDB(UserBase):
     id: int
+    role: UserRole
     is_active: bool
     is_verified: bool
     profile_picture_url: Optional[str]
