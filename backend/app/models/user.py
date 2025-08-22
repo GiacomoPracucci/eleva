@@ -1,7 +1,14 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text
+from sqlalchemy import Column, Integer, String, Boolean, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from app.db.base import Base, TimestampMixin
+import enum
 
+
+class UserRole(str, enum.Enum):
+    """User role enumeration for access control"""
+    USER = "user"
+    ADMIN = "admin"
+    SUPER_ADMIN = "super_admin"
 
 class User(Base, TimestampMixin):
     """
@@ -47,6 +54,9 @@ class User(Base, TimestampMixin):
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     
+    # Role field for access control
+    role = Column(SQLEnum(UserRole), default=UserRole.USER, nullable=False, index=True)
+    
     # Profile fields
     academic_level = Column(String(100))  # e.g., "High School", "University", etc.
     bio = Column(Text)
@@ -61,3 +71,13 @@ class User(Base, TimestampMixin):
     
     def __repr__(self):
         return f"<User(email='{self.email}', username='{self.username}')>"
+    
+    @property
+    def is_admin(self):
+        """Check if user has admin privileges"""
+        return self.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]
+    
+    @property
+    def is_super_admin(self):
+        """Check if user is a super admin"""
+        return self.role == UserRole.SUPER_ADMIN

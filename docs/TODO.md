@@ -2,6 +2,8 @@
 
 [] Admin Panel
 
+[] Capire e sistemare CORS (se indico indirizzi non va)
+
 [] Documentare parti mancanti in ProfilePage.tsx
 [] Documentare services/profile.ts
 

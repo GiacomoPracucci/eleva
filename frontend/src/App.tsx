@@ -8,6 +8,11 @@ import DashboardPage from '@/pages/DashboardPage';
 import SubjectsPage from '@/pages/SubjectsPage';
 import ProfilePage from '@/pages/ProfilePage';
 
+// Admin Panel Pages
+import AdminLayout from '@/components/admin/AdminLayout';
+import AdminDashboard from '@/pages/admin/AdminDashboard';
+import AdminUsersPage from '@/pages/admin/AdminUsersPage';
+
 // Layout
 import MainLayout from '@/components/layout/MainLayout';
 
@@ -41,6 +46,26 @@ function App() {
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="subjects" element={<SubjectsPage />} />
             <Route path="profile" element={<ProfilePage />} />
+          </Route>
+
+          {/* Admin Routes */}
+          <Route path="/admin" element={
+            <ProtectedRoute>
+              <AdminLayout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<AdminDashboard />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="subjects" element={
+              <div className="text-center py-12">
+                <h2 className="text-xl font-semibold text-gray-700">Subjects Management Coming Soon</h2>
+              </div>
+            } />
+            <Route path="settings" element={
+              <div className="text-center py-12">
+                <h2 className="text-xl font-semibold text-gray-700">Admin Settings Coming Soon</h2>
+              </div>
+            } />
           </Route>
 
           {/* 404 - Not Found */}

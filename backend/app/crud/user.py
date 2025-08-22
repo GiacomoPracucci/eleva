@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from typing import Optional, List
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, UserUpdate
 from app.core.security import get_password_hash, verify_password
 
@@ -181,6 +181,65 @@ class CRUDUser:
             bool: True if the user is active, False otherwise.
         """
         return user.is_active
+    
+    async def get_by_role(self, db: AsyncSession, role: UserRole, skip: int = 0, limit: int = 100) -> List[User]:
+        """
+        Retrieves all users with a specific role.
 
+        Args:
+            db (AsyncSession): The database session.
+            role (UserRole): The role to filter by.
+            skip (int): The number of records to skip. Defaults to 0.
+            limit (int): The maximum number of records to return. Defaults to 100.
+
+        Returns:
+            List[User]: A list of User objects with the specified role.
+        """
+        result = await db.execute(
+            select(User)
+            .filter(User.role == role)
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def update_role(self, db: AsyncSession, user_id: int, new_role: UserRole) -> Optional[User]:
+        """
+        Updates a user's role.
+
+        Args:
+            db (AsyncSession): The database session.
+            user_id (int): The ID of the user to update.
+            new_role (UserRole): The new role to assign.
+
+        Returns:
+            Optional[User]: The updated User object if found, otherwise None.
+        """
+        user = await self.get(db, user_id)
+        if not user:
+            return None
+        
+        user.role = new_role
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user
+    
+    async def count_by_role(self, db: AsyncSession, role: UserRole) -> int:
+        """
+        Counts the number of users with a specific role.
+
+        Args:
+            db (AsyncSession): The database session.
+            role (UserRole): The role to count.
+
+        Returns:
+            int: The number of users with the specified role.
+        """
+        from sqlalchemy import func
+        result = await db.execute(
+            select(func.count(User.id)).filter(User.role == role)
+        )
+        return result.scalar() or 0
 
 user_crud = CRUDUser()

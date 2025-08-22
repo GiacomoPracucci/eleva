@@ -13,6 +13,7 @@ export interface User {
   is_verified: boolean;
   created_at: string;
   updated_at: string;
+  role: 'user' | 'admin' | 'super_admin'; 
 }
 
 export interface UserCreate {
