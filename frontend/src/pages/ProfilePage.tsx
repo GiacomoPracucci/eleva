@@ -4,7 +4,7 @@
  */
 
 // React's core hooks for managing state and side effects.
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 // The primary hook from React Hook Form to manage form state and validation.
 import { useForm } from 'react-hook-form';
 // Our custom hook to interact with our global authentication state (Zustand).
@@ -13,8 +13,20 @@ import { useAuthStore } from '@/store/authStore';
 import api from '@/services/api';
 // TypeScript types defining the shape of user data.
 import { User, UserUpdate } from '@/types';
+
+import { profileService } from '@/services/profile';
+
 // Icons from the lucide-react library for the UI.
-import { Camera, Save, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { 
+  Camera, 
+  Save, 
+  AlertCircle, 
+  CheckCircle, 
+  X, 
+  Upload, 
+  Trash2,
+  Loader2 
+} from 'lucide-react';
 // A utility to conditionally join CSS class names together.
 import clsx from 'clsx';
 /**
@@ -57,12 +69,16 @@ export const ProfilePage = () => {
    */
   const [apiError, setApiError] = useState<string | null>(null);
 
-  /**
-   * Preview URL for the profile picture.
-   * This allows users to see their new picture before saving.
-   * NOTE: Currently for preview only - actual upload implementation pending.
-   */
+  // NUOVI STATES per upload
   const [profilePicturePreview, setProfilePicturePreview] = useState<string | null>(null);
+  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // useRef per tracciare l'URL di preview e fare cleanup
+  // PERCHÉ useRef? Perché vogliamo mantenere il riferimento tra i render
+  // senza causare re-render quando cambia
+  const previewUrlRef = useRef<string | null>(null);
 
   // ===================================================================================
   // FORM MANAGEMENT
@@ -110,6 +126,16 @@ export const ProfilePage = () => {
     }
   }, [user, reset]);
 
+  // Cleanup dell'URL di preview quando il componente si smonta
+  // IMPORTANTE: Previene memory leak!
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
+        profileService.revokePreviewUrl(previewUrlRef.current);
+      }
+    };
+  }, []);
+
   /**
    * Auto-hide success message after 3 seconds.
    * This provides a better UX by not requiring manual dismissal
@@ -148,11 +174,11 @@ export const ProfilePage = () => {
 
       // Make the API call to update the user profile
       // The PUT endpoint expects only the fields that need updating
-      const response = await api.put<User>('/users/me', data);
+      const updatedUser = await profileService.updateProfile(data);
 
       // Update the global state with the new user data
       // This ensures consistency across the entire application
-      setUser(response.data);
+      setUser(updatedUser);
 
       // Reset the form with the new values to update the "dirty" state
       // This prevents the "unsaved changes" warning after a successful save
@@ -190,7 +216,6 @@ export const ProfilePage = () => {
    */
   const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-
     if (!file) return;
 
     // validate file input
@@ -206,19 +231,120 @@ export const ProfilePage = () => {
       return;
     }
 
-    // Create preview URL
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setProfilePicturePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    // Cleanup vecchio preview URL se esiste
+    if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
+      profileService.revokePreviewUrl(previewUrlRef.current);
+    }
+
+    // Crea nuovo preview URL
+    const newPreviewUrl = profileService.createPreviewUrl(file);
+    previewUrlRef.current = newPreviewUrl;
+    setProfilePicturePreview(newPreviewUrl);
+    setSelectedFile(file);
+    setApiError(null);
+  };
+
+  /**
+   * Esegue l'upload effettivo dell'immagine
+   * PATTERN: Separazione tra selezione e conferma
+   * Questo permette all'utente di vedere l'anteprima prima di confermare
+   */
+  const uploadProfilePicture = async () => {
+    if (!selectedFile) return;
+
+    setIsUploadingPicture(true);
+    setUploadProgress(0);
     
-    // TODO: Implement actual upload to S3
-    // This would involve:
-    // 1. Creating a FormData object
-    // 2. Sending to /users/me/profile-picture endpoint
-    // 3. Updating global user state with new picture URL
-    console.log('Profile picture upload not yet implemented');
+    try {
+      // Simula progresso per UX (l'upload reale non fornisce progress events)
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 100);
+
+      const updatedUser = await profileService.uploadProfilePicture(selectedFile);
+      
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      
+      // Aggiorna stato globale
+      setUser(updatedUser);
+      
+      // Reset stati locali
+      setSelectedFile(null);
+      setProfilePicturePreview(updatedUser.profile_picture_url ?? null);
+
+      // Cleanup preview URL
+      if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
+        profileService.revokePreviewUrl(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
+      
+      setShowSuccessMessage(true);
+      
+      // Reset progress dopo animazione
+      setTimeout(() => setUploadProgress(0), 500);
+      
+    } catch (error: any) {
+      const errorMessage = 
+        error.response?.data?.detail || 
+        error.message ||
+        'Failed to upload image. Please try again.';
+      setApiError(errorMessage);
+      setUploadProgress(0);
+    } finally {
+      setIsUploadingPicture(false);
+    }
+  };
+
+  /**
+   * Cancella l'upload in corso o il file selezionato
+   */
+  const cancelUpload = () => {
+    setSelectedFile(null);
+    
+    // Ripristina l'immagine originale o l'iniziale dell'username
+    if (user?.profile_picture_url) {
+      setProfilePicturePreview(user.profile_picture_url);
+    } else {
+      setProfilePicturePreview(null);
+    }
+    
+    // Cleanup preview URL
+    if (previewUrlRef.current && previewUrlRef.current.startsWith('blob:')) {
+      profileService.revokePreviewUrl(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  };
+
+  /**
+   * Rimuove l'immagine profilo esistente
+   */
+  const deleteProfilePicture = async () => {
+    if (!window.confirm('Are you sure you want to remove your profile picture?')) {
+      return;
+    }
+
+    setIsUploadingPicture(true);
+    
+    try {
+      const updatedUser = await profileService.deleteProfilePicture();
+      setUser(updatedUser);
+      setProfilePicturePreview(null);
+      setShowSuccessMessage(true);
+    } catch (error: any) {
+      const errorMessage = 
+        error.response?.data?.detail || 
+        'Failed to delete profile picture. Please try again.';
+      setApiError(errorMessage);
+    } finally {
+      setIsUploadingPicture(false);
+    }
   };
 
   // ===================================================================================
@@ -235,12 +361,11 @@ export const ProfilePage = () => {
     );
   }
 
-
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold text-gray-900 mb-6">Profile Settings</h1>
 
-      {/* Success Notification - Animated slide-down effect */}
+      {/* Notifications */}
       {showSuccessMessage && (
         <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg flex items-center animate-slide-down">
           <CheckCircle className="w-5 h-5 mr-2 flex-shrink-0" />
@@ -248,7 +373,6 @@ export const ProfilePage = () => {
         </div>
       )}
 
-      {/* Error Notification - Shows API errors */}
       {apiError && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-center">
           <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0" />
@@ -263,10 +387,11 @@ export const ProfilePage = () => {
       )}
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        {/* Profile Header: Displays the user's avatar, name, and email. */}
+        {/* Profile Header con gestione immagine migliorata */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center space-x-6">
             <div className="relative">
+              {/* Avatar/Immagine profilo */}
               <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
                 {profilePicturePreview ? (
                   <img 
@@ -279,43 +404,97 @@ export const ProfilePage = () => {
                     {user.username?.[0]?.toUpperCase()}
                   </span>
                 )}
+                
+                {/* Progress overlay durante upload */}
+                {isUploadingPicture && (
+                  <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                    <div className="text-white">
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                      <span className="text-xs mt-1">{uploadProgress}%</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              {/* Hidden file input for profile picture upload */}
+              
+              {/* Hidden file input */}
               <input
                 id="profile-picture-input"
                 type="file"
                 accept="image/*"
                 onChange={handleProfilePictureChange}
                 className="hidden"
+                disabled={isUploadingPicture}
               />
-              <button 
-                onClick={() => document.getElementById('profile-picture-input')?.click()}
-                className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors"
-                title="Change profile picture"
-              >
-                <Camera className="w-4 h-4" />
-              </button>
+              
+              {/* Bottoni azione immagine */}
+              <div className="absolute -bottom-2 -right-2 flex space-x-1">
+                <button 
+                  onClick={() => document.getElementById('profile-picture-input')?.click()}
+                  disabled={isUploadingPicture}
+                  className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Change profile picture"
+                >
+                  <Camera className="w-4 h-4" />
+                </button>
+                
+                {user.profile_picture_url && !selectedFile && (
+                  <button 
+                    onClick={deleteProfilePicture}
+                    disabled={isUploadingPicture}
+                    className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Remove profile picture"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
+            
             <div className="flex-1">
               <h2 className="text-xl font-semibold text-gray-900">
                 {user.full_name || user.username}
               </h2>
               <p className="text-gray-600">{user.email}</p>
-              {/* Show if profile has unsaved changes */}
+              
+              {/* Azioni per immagine selezionata ma non caricata */}
+              {selectedFile && (
+                <div className="mt-3 flex items-center space-x-2">
+                  <button
+                    onClick={uploadProfilePicture}
+                    disabled={isUploadingPicture}
+                    className="inline-flex items-center px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
+                  >
+                    <Upload className="w-4 h-4 mr-1" />
+                    Upload Photo
+                  </button>
+                  <button
+                    onClick={cancelUpload}
+                    disabled={isUploadingPicture}
+                    className="inline-flex items-center px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Cancel
+                  </button>
+                  <span className="text-sm text-gray-500">
+                    Preview mode - click Upload to save
+                  </span>
+                </div>
+              )}
+              
               {isDirty && (
                 <p className="text-sm text-amber-600 mt-1">
-                  You have unsaved changes
+                  You have unsaved changes in the form below
                 </p>
               )}
             </div>
           </div>
         </div>
 
-        {/* Profile Form with validation and submission handling */}
+        {/* Rest of the form remains the same */}
         <div className="p-6">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {/* ... resto del form uguale ... */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Username Field (Read-only) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Username
@@ -329,7 +508,6 @@ export const ProfilePage = () => {
                 <p className="mt-1 text-xs text-gray-500">Username cannot be changed</p>
               </div>
 
-              {/* Full Name Field (Editable) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Full Name
@@ -354,7 +532,6 @@ export const ProfilePage = () => {
               </div>
             </div>
             
-            {/* Email Field (Read-only) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Email
@@ -370,7 +547,6 @@ export const ProfilePage = () => {
               </p>
             </div>
             
-            {/* Bio Field (Editable) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Bio
@@ -394,7 +570,6 @@ export const ProfilePage = () => {
               )}
             </div>
 
-            {/* Academic Level Field (Editable) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Academic Level
@@ -411,11 +586,9 @@ export const ProfilePage = () => {
               </select>
             </div>
 
-            {/* Privacy Settings Section */}
             <div className="border-t pt-4">
               <h3 className="text-lg font-medium text-gray-900 mb-3">Privacy Settings</h3>
               
-              {/* Public Profile Toggle */}
               <div className="space-y-3">
                 <label className="flex items-center space-x-3">
                   <input
@@ -433,7 +606,6 @@ export const ProfilePage = () => {
                   </div>
                 </label>
 
-                {/* AI Training Toggle */}
                 <label className="flex items-center space-x-3">
                   <input
                     type="checkbox"
@@ -452,13 +624,11 @@ export const ProfilePage = () => {
               </div>
             </div>
             
-            {/* Form Actions */}
             <div className="flex justify-between items-center pt-4 border-t">
               <div className="text-sm text-gray-500">
                 {isDirty && "Don't forget to save your changes"}
               </div>
               <div className="space-x-3">
-                {/* Cancel button - only shown when there are unsaved changes */}
                 {isDirty && (
                   <button
                     type="button"
@@ -468,7 +638,6 @@ export const ProfilePage = () => {
                     Cancel
                   </button>
                 )}
-                {/* Submit button with loading state */}
                 <button 
                   type="submit" 
                   disabled={isSubmitting || !isDirty}

@@ -3,11 +3,3 @@ uvicorn app.main:app --reload # lacniare backend
 npm run dev # lanciare server vite
 mkdir -p components/common components/auth components/subjects components/layout
 mkdir -p pages services hooks store types utils contexts
-
-
-// Note: This form currently lacks an `onSubmit` handler to save changes.
-Tasks:
-
-✅ Form Submission: Implementare handleSubmit per salvare modifiche profilo
-✅ Profile Picture Upload: Funzionalità upload immagine (attualmente solo placeholder)
-✅ Form Validation: Aggiungere react-hook-form validation
