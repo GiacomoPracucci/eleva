@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.api.router import api_router
 from app.db.session import engine
+from app.services.embedding_service import get_embedding_service
+from app.services.task_queue.base_task_queue import get_task_queue, cleanup_task_queue
 
 from app.db import Base
 
@@ -17,15 +19,21 @@ async def init_db():
 async def lifespan(app: FastAPI):
     """
     Async context manager for app lifespan events.
-    Replaces the old @app.on_event decorators.
     """
     # Startup
     await init_db()
+    
+    # Initialize services
+    embedding_service = get_embedding_service()
+    task_queue = get_task_queue()
+    
     print(f"{settings.PROJECT_NAME} started successfully")
     
     yield
     
     # Shutdown
+    await embedding_service.close()
+    await cleanup_task_queue()
     await engine.dispose()
     print(f"{settings.PROJECT_NAME} shutting down")
 

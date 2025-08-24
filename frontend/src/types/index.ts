@@ -108,3 +108,123 @@ export interface FieldError {
   message: string;
   type: string;
 }
+
+// ============================================================================
+// DOCUMENT MANAGEMENT TYPES
+// ============================================================================
+
+/**
+ * Enumeration of all possible document processing states.
+ * These states track the document through its processing pipeline.
+ * 
+ * Flow: PENDING → PARSING → CHUNKING → EMBEDDING → COMPLETED
+ *       Any state can transition to FAILED if an error occurs
+ */
+export enum ProcessingStatus {
+  PENDING = 'pending',       // File uploaded, waiting to start processing
+  PARSING = 'parsing',       // Extracting text from the file (PDF/DOCX → text)
+  CHUNKING = 'chunking',     // Splitting text into smaller segments
+  EMBEDDING = 'embedding',   // Generating vector embeddings via OpenAI
+  COMPLETED = 'completed',   // Ready for semantic search
+  FAILED = 'failed'         // Processing encountered an error
+}
+
+/**
+ * Represents a document stored in the system.
+ * Documents are files uploaded by users that get processed for semantic search.
+ * 
+ * Each document belongs to a subject and goes through a processing pipeline
+ * that extracts text, chunks it, and generates embeddings for search.
+ */
+export interface Document {
+  id: string;                          // UUID identifier
+  subject_id: number;                  // Which subject this document belongs to
+  owner_id: number;                    // User who uploaded the document
+  filename: string;                    // Original name of the uploaded file
+  file_type: string;                   // MIME type (e.g., 'application/pdf')
+  file_size: number;                   // Size in bytes
+  file_url?: string;                   // Optional URL to download original file
+  
+  // Processing information
+  processing_status: ProcessingStatus; // Current state in the pipeline
+  total_chunks: number;                // Number of text chunks created
+  processing_error?: string;           // Error message if status is FAILED
+  processing_started_at?: string;      // ISO timestamp when processing began
+  processing_completed_at?: string;    // ISO timestamp when processing finished
+  processing_duration?: number;        // Time taken in seconds
+  
+  // Metadata and timestamps
+  metadata: Record<string, any>;       // Flexible storage for additional info
+  created_at: string;                  // When document was uploaded
+  updated_at: string;                  // Last modification time
+  
+  // Computed fields (from backend)
+  is_ready: boolean;                   // True if status is COMPLETED
+}
+
+/**
+ * Data required to create a new document.
+ * Most information is extracted from the uploaded file itself.
+ */
+export interface DocumentCreate {
+  file: File;                          // The actual file object from input
+  metadata?: Record<string, any>;      // Optional metadata to attach
+}
+
+/**
+ * Response received after uploading a document.
+ * Provides information needed to track the processing status.
+ */
+export interface DocumentUploadResponse {
+  document_id: string;                 // UUID to track this document
+  filename: string;                    // Confirmed filename
+  file_size: number;                   // Confirmed size
+  processing_status: ProcessingStatus; // Initial status (usually PENDING)
+  message: string;                     // User-friendly status message
+  status_endpoint: string;             // API endpoint to check progress
+}
+
+/**
+ * Detailed processing status for a document.
+ * Used for real-time progress tracking during processing.
+ */
+export interface DocumentProcessingStatus {
+  document_id: string;
+  status: ProcessingStatus;
+  total_chunks?: number;               // Total chunks to process
+  processed_chunks?: number;           // Chunks completed so far
+  processing_started_at?: string;
+  processing_completed_at?: string;
+  processing_error?: string;
+  estimated_time_remaining?: number;   // Seconds until completion
+  progress_percentage?: number;        // 0-100 progress indicator
+}
+
+/**
+ * Tracks upload progress for file uploads.
+ * Used to show progress bars during file upload.
+ */
+export interface UploadProgress {
+  documentId?: string;                 // Set after upload starts
+  filename: string;
+  loaded: number;                      // Bytes uploaded so far
+  total: number;                       // Total bytes to upload
+  percentage: number;                  // 0-100 progress
+  status: 'pending' | 'uploading' | 'processing' | 'completed' | 'error';
+  error?: string;
+}
+
+/**
+ * Represents a chunk of text from a document.
+ * Documents are split into chunks for more granular search.
+ */
+export interface DocumentChunk {
+  id: number;
+  chunk_index: number;                 // Position in the document (0-based)
+  chunk_text: string;                  // The actual text content
+  start_char?: number;                 // Starting position in original
+  end_char?: number;                   // Ending position in original
+  metadata: Record<string, any>;
+  has_embedding: boolean;              // Whether embedding was generated
+  created_at: string;
+}

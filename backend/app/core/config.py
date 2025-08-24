@@ -9,6 +9,7 @@ and/or a .env file, providing type validation and a single source of truth for c
 from pydantic_settings import BaseSettings
 from typing import List, Union
 from pydantic import AnyHttpUrl, field_validator
+import os
 
 class Settings(BaseSettings):
     """
@@ -19,6 +20,7 @@ class Settings(BaseSettings):
     values from environment variables or a specified .env file.
 
     Attributes:
+    TODO add new embedding attributes
         PROJECT_NAME (str): The name of the project.
         VERSION (str): The current version of the application.
         API_V1_STR (str): The prefix for the v1 API routes.
@@ -99,6 +101,23 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str = ""
     AWS_BUCKET_NAME: str = ""
     AWS_REGION: str = "us-east-1"
+
+    # OpenAI settings for embeddings
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_DIMENSIONS: int = 1536
+    
+    # Document processing settings
+    MAX_FILE_SIZE_MB: int = 50
+    ALLOWED_FILE_TYPES: List[str] = [
+        "application/pdf",
+        "text/plain", 
+        "text/markdown",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ]
+    CHUNK_SIZE: int = 1000
+    CHUNK_OVERLAP: int = 200
+    CHUNKING_STRATEGY: str = "sentence"  # fixed_size, sentence, paragraph
 
     class Config:
         """Pydantic model configuration."""

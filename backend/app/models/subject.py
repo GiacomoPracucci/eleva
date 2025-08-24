@@ -54,7 +54,8 @@ class Subject(Base, TimestampMixin):
     
     # Relationships
     owner = relationship("User", back_populates="subjects")
-    # Future: documents = relationship("Document", back_populates="subject")
+
+    documents = relationship("Document", back_populates="subject", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Subject(name='{self.name}', owner_id={self.owner_id})>"

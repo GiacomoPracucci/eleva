@@ -2,7 +2,7 @@
 
 [] Admin Panel
     [] Subject Count degli utenti non funziona
-    [] 
+    [] BUG durante login con utente admin (password required e bisogna schiacchiare login 3 volte)
 
 [] Capire e sistemare CORS (se indico indirizzi non va)
 

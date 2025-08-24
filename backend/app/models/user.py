@@ -68,6 +68,7 @@ class User(Base, TimestampMixin):
     
     # Relationships
     subjects = relationship("Subject", back_populates="owner", cascade="all, delete-orphan")
+    documents = relationship("Document", back_populates="owner", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(email='{self.email}', username='{self.username}')>"

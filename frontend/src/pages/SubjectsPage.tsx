@@ -1,7 +1,8 @@
 /**
  * @file This file defines the SubjectsPage, a full-featured component for managing
- * a user's academic subjects. It handles all CRUD (Create, Read, Update, Delete)
- * operations, including fetching, creating, editing, deleting, and archiving subjects.
+ * a user's academic subjects with integrated document management.
+ * It handles all CRUD operations for subjects and provides document upload/management
+ * capabilities directly within each subject card.
  */
 
 // React's core hooks for managing state and side effects.
@@ -19,14 +20,24 @@ import {
   Tag,
   Archive,
   MoreVertical,
-  GraduationCap
+  GraduationCap,
+  Upload,
+  ChevronDown,
+  ChevronUp,
+  Folder,
+  FolderOpen
 } from 'lucide-react';
 // A utility to conditionally join CSS class names together.
 import clsx from 'clsx';
 // The configured Axios instance for making API calls.
 import api from '@/services/api';
-// TypeScript types defining the shape of subject data.
-import { Subject, SubjectCreate } from '@/types';
+// TypeScript types defining the shape of subject and document data.
+import { Subject, SubjectCreate, ProcessingStatus } from '@/types';
+// Import our document components
+import DocumentUpload from '@/components/documents/DocumentUpload';
+import DocumentList from '@/components/documents/DocumentList';
+// Import documents store for fetching documents
+import { useDocumentsStore } from '@/store/documentsStore';
 
 // ===================================================================================
 // CONSTANTS
@@ -56,9 +67,8 @@ const ICONS = [
 ];
 
 /**
- * The SubjectsPage component provides a complete interface for managing subjects.
- * It features a grid display of subjects, a modal for creation and editing,
- * and functionality for archiving and deleting.
+ * The SubjectsPage component provides a complete interface for managing subjects
+ * with integrated document management capabilities.
  */
 const SubjectsPage = () => {
   // ===================================================================================
@@ -72,6 +82,9 @@ const SubjectsPage = () => {
   const [deletingSubjectId, setDeletingSubjectId] = useState<number | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Get documents state from store
+  const { documentsBySubject } = useDocumentsStore();
 
   // ===================================================================================
   // FORM MANAGEMENT
@@ -187,8 +200,7 @@ const SubjectsPage = () => {
    * @param id - The ID of the subject to delete.
    */
   const deleteSubject = async (id: number) => {
-    // A simple `window.confirm` is used here for confirmation. In a real app,
-    // a custom confirmation modal would provide a better user experience.
+    // A simple `window.confirm` is used here for confirmation.
     if (!window.confirm('Are you sure you want to delete this subject?')) {
       return;
     }
@@ -232,107 +244,328 @@ const SubjectsPage = () => {
   // ===================================================================================
 
   /**
-   * A presentational component that renders a single subject card.
+   * A presentational component that renders a single subject card with document management.
    * @param {object} props - The component props.
    * @param {Subject} props.subject - The subject data to display.
    */
   const SubjectCard = ({ subject }: { subject: Subject }) => {
     const [showMenu, setShowMenu] = useState(false);
     const icon = ICONS.find(i => i.name === subject.icon)?.icon || '📚';
+    
+    // ========================================================================
+    // DOCUMENT MANAGEMENT STATE
+    // ========================================================================
+    
+    /**
+     * Controls whether the documents section is expanded.
+     * Each subject card can independently show/hide its documents.
+     */
+    const [isDocumentsExpanded, setIsDocumentsExpanded] = useState(false);
+    
+    /**
+     * Controls the visibility of the document upload interface.
+     * When true, shows the upload component inline in the card.
+     */
+    const [showUploadInterface, setShowUploadInterface] = useState(false);
+    
+    /**
+     * Tracks the number of documents for this subject.
+     * Updated when documents are fetched or modified.
+     */
+    const [documentCount, setDocumentCount] = useState<number>(0);
+    
+    /**
+     * Tracks how many documents are currently processing.
+     * Used to show a loading indicator on the card.
+     */
+    const [processingCount, setProcessingCount] = useState<number>(0);
+    
+    // Get documents from the store for this subject
+    const { documentsBySubject, fetchDocuments } = useDocumentsStore();
+    const documents = documentsBySubject[subject.id] || [];
+    
+    // ========================================================================
+    // EFFECTS FOR DOCUMENT DATA
+    // ========================================================================
+    
+    /**
+     * Fetch document count when component mounts or when documents change.
+     * This provides a quick overview without expanding the section.
+     */
+    useEffect(() => {
+      // Update counts based on fetched documents
+      if (documents.length > 0) {
+        setDocumentCount(documents.length);
+        
+        // Count processing documents
+        const processing = documents.filter(doc => 
+          [ProcessingStatus.PENDING, ProcessingStatus.PARSING, 
+           ProcessingStatus.CHUNKING, ProcessingStatus.EMBEDDING].includes(doc.processing_status)
+        ).length;
+        setProcessingCount(processing);
+      } else if (isDocumentsExpanded) {
+        // If expanded but no documents loaded, fetch them
+        fetchDocuments(subject.id);
+      }
+    }, [documents, subject.id, isDocumentsExpanded]);
+    
+    /**
+     * Handles successful document upload.
+     * Refreshes the document list and provides feedback.
+     */
+    const handleUploadComplete = (documentId: string) => {
+      // Refresh document list
+      fetchDocuments(subject.id);
+      // Close upload interface after successful upload
+      setShowUploadInterface(false);
+      // Keep documents section expanded to show the new document
+      setIsDocumentsExpanded(true);
+    };
+    
+    /**
+     * Toggles the documents section expansion.
+     * Fetches documents on first expansion for performance.
+     */
+    const handleToggleDocuments = () => {
+      const newExpanded = !isDocumentsExpanded;
+      setIsDocumentsExpanded(newExpanded);
+      
+      // Fetch documents when expanding for the first time
+      if (newExpanded && documents.length === 0) {
+        fetchDocuments(subject.id);
+      }
+      
+      // Close upload interface when collapsing
+      if (!newExpanded) {
+        setShowUploadInterface(false);
+      }
+    };
 
     return (
       <div 
         className={clsx(
-          "bg-white rounded-xl shadow-sm border-2 p-6 relative transition-all hover:shadow-md",
+          "bg-white rounded-xl shadow-sm border-2 relative transition-all hover:shadow-md",
           subject.is_archived && "opacity-60"
         )}
         style={{ borderColor: subject.color || '#e5e7eb' }}
       >
-        {/* Dropdown menu for actions */}
-        <div className="absolute top-4 right-4">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="p-1 hover:bg-gray-100 rounded-lg"
-          >
-            <MoreVertical className="w-5 h-5 text-gray-500" />
-          </button>
-          {showMenu && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-              <button
-                onClick={() => {
-                  openModal(subject);
-                  setShowMenu(false);
-                }}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center"
-              >
-                <Edit2 className="w-4 h-4 mr-2" />
-                Edit
-              </button>
-              <button
-                onClick={() => {
-                  toggleArchive(subject);
-                  setShowMenu(false);
-                }}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center"
-              >
-                <Archive className="w-4 h-4 mr-2" />
-                {subject.is_archived ? 'Unarchive' : 'Archive'}
-              </button>
-              <button
-                onClick={() => {
-                  deleteSubject(subject.id);
-                  setShowMenu(false);
-                }}
-                disabled={deletingSubjectId === subject.id}
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center text-red-600"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Main card content */}
-        <div className="flex items-start space-x-4">
-          <div 
-            className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
-            style={{ backgroundColor: `${subject.color}20` }}
-          >
-            {icon}
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {subject.name}
-            </h3>
-            {subject.description && (
-              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                {subject.description}
-              </p>
+        {/* ================================================================
+            CARD HEADER - Subject info and actions
+            ================================================================ */}
+        <div className="p-6">
+          {/* Dropdown menu for actions */}
+          <div className="absolute top-4 right-4">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-1 hover:bg-gray-100 rounded-lg"
+            >
+              <MoreVertical className="w-5 h-5 text-gray-500" />
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                <button
+                  onClick={() => {
+                    openModal(subject);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center"
+                >
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  Edit
+                </button>
+                <button
+                  onClick={() => {
+                    toggleArchive(subject);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center"
+                >
+                  <Archive className="w-4 h-4 mr-2" />
+                  {subject.is_archived ? 'Unarchive' : 'Archive'}
+                </button>
+                <button
+                  onClick={() => {
+                    deleteSubject(subject.id);
+                    setShowMenu(false);
+                  }}
+                  disabled={deletingSubjectId === subject.id}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center text-red-600"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </button>
+              </div>
             )}
-            {/* Metadata tags */}
-            <div className="flex flex-wrap gap-2 mt-3">
-              {subject.level && (
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700">
-                  <GraduationCap className="w-3 h-3 mr-1" />
-                  {subject.level}
-                </span>
+          </div>
+
+          {/* Main card content */}
+          <div className="flex items-start space-x-4">
+            <div 
+              className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl"
+              style={{ backgroundColor: `${subject.color}20` }}
+            >
+              {icon}
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {subject.name}
+              </h3>
+              {subject.description && (
+                <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                  {subject.description}
+                </p>
               )}
-              {subject.academic_year && (
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700">
-                  <Calendar className="w-3 h-3 mr-1" />
-                  {subject.academic_year}
+              {/* Metadata tags */}
+              <div className="flex flex-wrap gap-2 mt-3">
+                {subject.level && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700">
+                    <GraduationCap className="w-3 h-3 mr-1" />
+                    {subject.level}
+                  </span>
+                )}
+                {subject.academic_year && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700">
+                    <Calendar className="w-3 h-3 mr-1" />
+                    {subject.academic_year}
+                  </span>
+                )}
+                {subject.category && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700">
+                    <Tag className="w-3 h-3 mr-1" />
+                    {subject.category}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* ================================================================
+              DOCUMENTS SECTION HEADER - Shows count and toggle
+              ================================================================ */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between">
+              {/* Documents toggle button with count */}
+              <button
+                onClick={handleToggleDocuments}
+                className="flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                {isDocumentsExpanded ? (
+                  <FolderOpen className="w-4 h-4" />
+                ) : (
+                  <Folder className="w-4 h-4" />
+                )}
+                <span className="font-medium">
+                  Documents
+                  {documentCount > 0 && (
+                    <span className="ml-1 text-xs">
+                      ({documentCount})
+                    </span>
+                  )}
                 </span>
-              )}
-              {subject.category && (
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700">
-                  <Tag className="w-3 h-3 mr-1" />
-                  {subject.category}
-                </span>
+                {processingCount > 0 && (
+                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">
+                    {processingCount} processing
+                  </span>
+                )}
+                {isDocumentsExpanded ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+              
+              {/* Quick upload button - always visible */}
+              {!subject.is_archived && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsDocumentsExpanded(true);
+                    setShowUploadInterface(true);
+                  }}
+                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Upload document"
+                >
+                  <Upload className="w-4 h-4" />
+                </button>
               )}
             </div>
           </div>
         </div>
+        
+        {/* ================================================================
+            EXPANDABLE DOCUMENTS SECTION
+            ================================================================ */}
+        {isDocumentsExpanded && (
+          <div className="border-t border-gray-100 bg-gray-50/50">
+            <div className="p-4 space-y-4">
+              {/* Upload interface toggle button */}
+              {!subject.is_archived && !showUploadInterface && (
+                <button
+                  onClick={() => setShowUploadInterface(true)}
+                  className="w-full py-2 px-4 bg-white border-2 border-dashed border-gray-300 rounded-lg 
+                           text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600 
+                           transition-colors flex items-center justify-center space-x-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Document</span>
+                </button>
+              )}
+              
+              {/* Document upload component */}
+              {showUploadInterface && !subject.is_archived && (
+                <div className="bg-white rounded-lg p-4 border border-gray-200">
+                  {/* Close button for upload interface */}
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-sm font-medium text-gray-900">
+                      Upload Document
+                    </h4>
+                    <button
+                      onClick={() => setShowUploadInterface(false)}
+                      className="p-1 hover:bg-gray-100 rounded"
+                    >
+                      <X className="w-4 h-4 text-gray-500" />
+                    </button>
+                  </div>
+                  
+                  {/* Upload component */}
+                  <DocumentUpload
+                    subjectId={subject.id}
+                    onUploadComplete={handleUploadComplete}
+                    onUploadError={(error) => {
+                      console.error('Upload error:', error);
+                      // Could show a toast notification here
+                    }}
+                    compact={false}
+                  />
+                </div>
+              )}
+              
+              {/* Document list */}
+              <div className="space-y-2">
+                <DocumentList
+                  subjectId={subject.id}
+                  compact={true}
+                  onDocumentClick={(doc) => {
+                    // Could open a modal or navigate to document details
+                    console.log('Document clicked:', doc);
+                  }}
+                />
+              </div>
+              
+              {/* Documents summary footer */}
+              {documents.length > 0 && (
+                <div className="pt-3 border-t border-gray-200 text-xs text-gray-500 flex items-center justify-between">
+                  <span>
+                    {documents.filter(d => d.is_ready).length} ready for search
+                  </span>
+                  <span>
+                    {documents.reduce((acc, doc) => acc + (doc.total_chunks || 0), 0)} total chunks
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -341,6 +574,16 @@ const SubjectsPage = () => {
   // MAIN RENDER
   // The final JSX output of the component, with conditional rendering for different states.
   // ===================================================================================
+
+  // Calculate global processing count across all subjects
+  const totalProcessingDocuments = subjects.reduce((acc, subject) => {
+    const docs = documentsBySubject[subject.id] || [];
+    const processing = docs.filter(doc => 
+      [ProcessingStatus.PENDING, ProcessingStatus.PARSING, 
+       ProcessingStatus.CHUNKING, ProcessingStatus.EMBEDDING].includes(doc.processing_status)
+    ).length;
+    return acc + processing;
+  }, 0);
 
   return (
     <div>
@@ -351,6 +594,13 @@ const SubjectsPage = () => {
           <p className="text-gray-600 mt-1">
             Manage your academic subjects and track your progress
           </p>
+          {/* Global processing indicator */}
+          {totalProcessingDocuments > 0 && (
+            <p className="text-sm text-blue-600 mt-2 flex items-center">
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+              {totalProcessingDocuments} document{totalProcessingDocuments > 1 ? 's' : ''} processing...
+            </p>
+          )}
         </div>
         <div className="flex items-center space-x-3">
           <button
