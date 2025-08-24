@@ -126,8 +126,8 @@ async def process_document_background(
                 )
                 
                 # Update document with parsing metadata
-                document.metadata = {
-                    **(document.metadata or {}),
+                document.metadata_ = {
+                    **(document.metadata_ or {}),
                     **metadata
                 }
                 await db.commit()
@@ -276,7 +276,7 @@ async def upload_document(
         'file_size': len(file_content),
         'file_url': None,  # Will be set when we implement S3 upload
         'processing_status': ProcessingStatus.PENDING,
-        'metadata': {
+        'metadata_': {
             'uploaded_at': datetime.now(timezone.utc).isoformat(),
             'original_filename': file.filename
         }
