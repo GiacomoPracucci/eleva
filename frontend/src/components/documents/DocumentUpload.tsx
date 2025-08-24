@@ -176,6 +176,8 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
    * Validates the file and updates state.
    */
   const handleFileSelect = (file: File) => {
+    console.log('handleFileSelect called with file:', file.name, file.type, file.size);
+    
     // Clear previous state
     setError(null);
     setUploadProgress(null);
@@ -184,6 +186,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     // Validate file
     const validationError = validateFile(file);
     if (validationError) {
+      console.log('Validation error:', validationError);
       setError(validationError);
       setSelectedFile(null);
       return;
@@ -191,6 +194,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     
     // File is valid, set it as selected
     setSelectedFile(file);
+    console.log('File successfully selected and ready for upload');
   };
   
   /**
@@ -200,7 +204,12 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
+    
+    // Check if the dragged item is a file
+    if (e.dataTransfer.types && e.dataTransfer.types.indexOf('Files') !== -1) {
+      e.dataTransfer.dropEffect = 'copy';
+      setIsDragging(true);
+    }
   }, []);
   
   /**
@@ -209,7 +218,15 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+    
+    // Only set isDragging to false if we're leaving the drop zone entirely
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
+      setIsDragging(false);
+    }
   }, []);
   
   /**
@@ -221,10 +238,16 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     e.stopPropagation();
     setIsDragging(false);
     
+    console.log('File dropped');
+    
     // Get the first file from the drop
     const files = e.dataTransfer.files;
+    console.log('Dropped files:', files);
+    
     if (files && files.length > 0) {
-      handleFileSelect(files[0]);
+      const file = files[0];
+      console.log('Processing dropped file:', file.name);
+      handleFileSelect(file);
     }
   }, []);
   
@@ -232,9 +255,14 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
    * Handles file selection from input element.
    */
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('File input changed');
     const files = e.target.files;
+    console.log('Selected files:', files);
+    
     if (files && files.length > 0) {
-      handleFileSelect(files[0]);
+      const file = files[0];
+      console.log('Processing selected file:', file.name);
+      handleFileSelect(file);
     }
   };
   
@@ -418,14 +446,38 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
         className="hidden"
       />
       
-      {/* Drop zone */}
+      {/* Drop zone - FIXED: Added preventDefault to all drag events */}
       <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => !selectedFile && fileInputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();  // IMPORTANTE: Previene il comportamento default
+          e.stopPropagation();
+          handleDragOver(e);
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();  // IMPORTANTE: Previene il comportamento default
+          e.stopPropagation();
+          setIsDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleDragLeave(e);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();  // IMPORTANTE: Previene l'apertura del file nel browser
+          e.stopPropagation();
+          handleDrop(e);
+        }}
+        onClick={() => {
+          console.log('Drop zone clicked, selectedFile:', selectedFile);
+          if (!selectedFile && fileInputRef.current) {
+            console.log('Opening file dialog');
+            fileInputRef.current.click();
+          }
+        }}
         className={clsx(
-          'relative border-2 border-dashed rounded-lg p-8 transition-all cursor-pointer',
+          'relative border-2 border-dashed rounded-lg p-8 transition-all',
+          !selectedFile && 'cursor-pointer',
           isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400',
           selectedFile && 'cursor-default',
           error && 'border-red-300 bg-red-50'
@@ -515,19 +567,26 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
           
           {/* Action buttons */}
           {selectedFile && !uploadProgress && (
-            <div className="flex space-x-3">
+            <div className="flex space-x-3 mt-4">
               <button
+                type="button"
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
+                  console.log('Upload button clicked!');
                   handleUpload();
                 }}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
               >
+                <Upload className="w-4 h-4 mr-2" />
                 Upload & Process
               </button>
               <button
+                type="button"
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
+                  console.log('Cancel button clicked');
                   resetUpload();
                 }}
                 className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"

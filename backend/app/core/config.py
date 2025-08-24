@@ -113,6 +113,7 @@ class Settings(BaseSettings):
         "application/pdf",
         "text/plain", 
         "text/markdown",
+        "text/x-markdown",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ]
     CHUNK_SIZE: int = 1000

@@ -75,7 +75,7 @@ class CRUDDocument:
         
         if not include_failed:
             query = query.filter(
-                Document.processing_status != ProcessingStatus.FAILED.value
+                Document.processing_status != ProcessingStatus.FAILED
             )
         
         query = query.order_by(Document.created_at.desc())
@@ -233,7 +233,7 @@ class CRUDDocument:
         # Get counts by status
         status_counts = {}
         for status in ProcessingStatus:
-            count_query = base_query.filter(Document.processing_status == status.value)
+            count_query = base_query.filter(Document.processing_status == status)
             result = await db.execute(select(func.count()).select_from(count_query.subquery()))
             status_counts[status.value] = result.scalar()
         
@@ -263,7 +263,7 @@ class CRUDDocument:
             'total_chunks': total_chunks,
             'status_breakdown': status_counts,
             'average_size_bytes': total_size // total_documents if total_documents > 0 else 0,
-            'ready_for_search': status_counts.get(ProcessingStatus.COMPLETED.value, 0)
+            'ready_for_search': status_counts.get(ProcessingStatus.COMPLETED, 0)
         }
     
     def is_owner(self, document: Document, user_id: int) -> bool:

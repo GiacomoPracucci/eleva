@@ -71,7 +71,7 @@ class TaskQueue:
         # Store task metadata
         self.tasks[task_id] = {
             'type': task_type.value,
-            'status': TaskStatus.PENDING.value,
+            'status': TaskStatus.PENDING,
             'created_at': asyncio.get_event_loop().time(),
             'kwargs': kwargs
         }

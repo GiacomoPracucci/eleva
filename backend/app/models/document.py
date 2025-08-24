@@ -6,7 +6,7 @@ and associated vector embeddings. It's designed to work with pgvector for
 efficient similarity search operations.
 """
 
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, DateTime, JSON, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, JSON, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
@@ -16,11 +16,12 @@ from datetime import datetime, timezone
 from app.db.base import Base, TimestampMixin
 
 
-class ProcessingStatus(enum.Enum):
+class ProcessingStatus(str, enum.Enum):
     """
     Enumeration of possible document processing states.
     
     IMPORTANTE: I valori devono corrispondere esattamente all'enum nel database PostgreSQL
+    Usiamo str come base class per garantire la serializzazione corretta
     """
     PENDING = "pending"      
     PARSING = "parsing"      
@@ -79,10 +80,10 @@ class Document(Base, TimestampMixin):
     # Processing Information
     total_chunks = Column(Integer, default=0)
     processing_status = Column(
-        SQLEnum(ProcessingStatus),
+        SQLEnum(ProcessingStatus, values_callable=lambda obj: [e.value for e in obj]), 
         default=ProcessingStatus.PENDING,
         nullable=False,
-        index=True  # Index for filtering by status
+        index=True
     )
     processing_error = Column(Text)  # Store error details if processing fails
     processing_started_at = Column(DateTime(timezone=True))
@@ -103,12 +104,12 @@ class Document(Base, TimestampMixin):
     )
     
     def __repr__(self):
-        return f"<Document(filename='{self.filename}', status={self.processing_status.value})>"
+        return f"<Document(filename='{self.filename}', status={self.processing_status.value if self.processing_status else 'None'})>"
     
     @property
     def is_ready(self) -> bool:
         """Check if the document is ready for vector search."""
-        return self.processing_status == ProcessingStatus.COMPLETED.value
+        return self.processing_status == ProcessingStatus.COMPLETED
     
     @property
     def processing_duration(self) -> float | None:

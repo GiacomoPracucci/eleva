@@ -11,7 +11,6 @@ from datetime import datetime
 from uuid import UUID
 from enum import Enum
 
-
 class ProcessingStatusEnum(str, Enum):
     """
     Enumeration of document processing states for API responses.
@@ -122,7 +121,7 @@ class DocumentChunkResponse(BaseModel):
             "chunk_text": chunk_obj.chunk_text,
             "start_char": chunk_obj.start_char,
             "end_char": chunk_obj.end_char,
-            "metadata": chunk_obj.metadata or {},
+            "metadata": chunk_obj.metadata_ or {},
             "has_embedding": chunk_obj.embedding is not None,
             "created_at": chunk_obj.created_at
         }
@@ -208,13 +207,13 @@ class DocumentResponse(BaseModel):
             file_type=obj.file_type,
             file_size=obj.file_size,
             file_url=obj.file_url,
-            processing_status=obj.processing_status.value,
+            processing_status=obj.processing_status,
             total_chunks=obj.total_chunks or 0,
             processing_error=obj.processing_error,
             processing_started_at=obj.processing_started_at,
             processing_completed_at=obj.processing_completed_at,
             processing_duration=obj.processing_duration,
-            metadata=obj.metadata or {},
+            metadata=obj.metadata_ or {},
             created_at=obj.created_at,
             updated_at=obj.updated_at,
             is_ready=obj.is_ready

@@ -339,9 +339,9 @@ class EmbeddingService:
         """
         document.processing_status = status
         
-        if status == ProcessingStatus.EMBEDDING.value:
+        if status == ProcessingStatus.EMBEDDING:
             document.processing_started_at = datetime.now(timezone.utc)
-        elif status in [ProcessingStatus.COMPLETED.value, ProcessingStatus.FAILED.value]:
+        elif status in [ProcessingStatus.COMPLETED, ProcessingStatus.FAILED]:
             document.processing_completed_at = datetime.now(timezone.utc)
         
         if error_message:

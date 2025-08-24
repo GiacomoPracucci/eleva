@@ -472,7 +472,7 @@ async def get_document_status(
     
     # Estimate time remaining (simple heuristic)
     estimated_time = None
-    if document.processing_status == ProcessingStatus.EMBEDDING.value and chunks:
+    if document.processing_status == ProcessingStatus.EMBEDDING and chunks:
         # Assume 0.5 seconds per chunk as a rough estimate
         remaining_chunks = len(chunks) - processed_chunks
         estimated_time = int(remaining_chunks * 0.5)
