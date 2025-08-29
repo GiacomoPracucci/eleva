@@ -9,10 +9,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 // Our custom hook to interact with our global authentication state (Zustand).
 import { useAuthStore } from '@/store/authStore';
-// The configured Axios instance for making API calls.
-import api from '@/services/api';
 // TypeScript types defining the shape of user data.
-import { User, UserUpdate } from '@/types';
+import { UserUpdate } from '@/types';
 
 import { profileService } from '@/services/profile';
 
