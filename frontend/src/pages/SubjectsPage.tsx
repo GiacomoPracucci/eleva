@@ -1,483 +1,270 @@
 /**
- * @file This file defines the SubjectsPage, a full-featured component for managing
- * a user's academic subjects with integrated document management.
- * It handles all CRUD operations for subjects and provides document upload/management
- * capabilities directly within each subject card.
+ * @file SubjectsPage Component (REFACTORED)
+ * 
+ * Container component per la gestione subjects.
+ * Dopo il refactoring, questo componente è MOLTO più snello.
+ * 
+ * RESPONSABILITÀ:
+ * 1. Orchestrare componenti child
+ * 2. Connettere hooks con UI
+ * 3. Gestire navigazione/routing
+ * 
+ * NON-RESPONSABILITÀ (delegate):
+ * - Business logic → useSubjects hook
+ * - Form logic → useSubjectForm hook  
+ * - API calls → SubjectService
+ * - UI components → Componenti presentazionali
+ * 
+ * PATTERN: Smart/Container Component
+ * - Connette logica e presentazione
+ * - Minima UI diretta
+ * - Focalizzato su orchestrazione
+ * 
+ * DA 600+ RIGHE A ~150 RIGHE! 🎉
  */
 
-// React's core hooks for managing state and side effects.
-import { useState, useEffect } from 'react';
-// The primary hook from React Hook Form to manage form state and validation.
-import { useForm } from 'react-hook-form';
-// A comprehensive set of icons from the lucide-react library.
-import { 
-  Plus, 
-  BookOpen, 
-  X, 
-  Archive,
-} from 'lucide-react';
-// A utility to conditionally join CSS class names together.
-import clsx from 'clsx';
-// The configured Axios instance for making API calls.
-import api from '@/services/api';
-// TypeScript types defining the shape of subject and document data.
-import { Subject, SubjectCreate, ProcessingStatus } from '@/types';
-// Import documents store for fetching documents
-import { useDocumentsStore } from '@/store/documentsStore';
-import SubjectCard from '@/components/subjects/SubjectCard';
-import { ICONS, COLORS } from '@/constants/subjects';
+import React, { useState, useCallback } from 'react';
+import { Subject } from '@/types';
 
-// ===================================================================================
-// MAIN SUBJECTS PAGE COMPONENT
-// ===================================================================================
+// Custom Hooks (Business Logic)
+import { useSubjects } from '@/hooks/subjects/useSubjects';
+import { useSubjectForm } from '@/hooks/subjects/useSubjectForm';
+
+// Presentational Components
+import { SubjectList } from '@/components/subjects/SubjectList';
+import { SubjectModal } from '@/components/subjects/SubjectModal';
+import { SubjectEmptyState } from '@/components/subjects/SubjectEmptyState';
+import { SubjectFilters } from '@/components/subjects/SubjectFilters';
+
+// Utils
+import { AlertCircle } from 'lucide-react';
 
 /**
- * The SubjectsPage component provides a complete interface for managing subjects
- * with integrated document management capabilities.
+ * SubjectsPage - Pagina principale per gestione subjects
+ * 
+ * ARCHITETTURA:
+ * ```
+ * SubjectsPage (Container)
+ *   ├── useSubjects (Logic)
+ *   ├── useSubjectForm (Form Logic)
+ *   ├── SubjectFilters (UI)
+ *   ├── SubjectList (UI)
+ *   ├── SubjectModal (UI)
+ *   └── SubjectEmptyState (UI)
+ * ```
+ * 
+ * Questo componente è ora un "orchestratore" che:
+ * 1. Usa hooks per la logica
+ * 2. Passa dati/callbacks ai componenti presentazionali
+ * 3. Gestisce solo stato UI locale (modal open/close)
+ * 
+ * @component
  */
-const SubjectsPage = () => {
-  // ===================================================================================
-  // STATE MANAGEMENT
-  // All component-level state is managed here using React's `useState` hook.
-  // ===================================================================================
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
-  const [deletingSubjectId, setDeletingSubjectId] = useState<number | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const SubjectsPage: React.FC = () => {
+  // ============================================================================
+  // HOOKS - BUSINESS LOGIC
+  // Tutta la logica complessa è estratta in custom hooks
+  // ============================================================================
   
-  // Get documents state from store
-  const { documentsBySubject } = useDocumentsStore();
-
-  // ===================================================================================
-  // FORM MANAGEMENT
-  // `react-hook-form` is used for robust and performant form handling.
-  // ===================================================================================
+  /**
+   * Hook principale per gestione subjects.
+   * Gestisce stato, API calls, e azioni CRUD.
+   * 
+   * SEPARATION OF CONCERNS: Logica isolata dal componente
+   */
   const {
-    register,
-    handleSubmit,
-    reset,
-    setValue,
-    watch,
-    formState: { errors, isSubmitting },
-  } = useForm<SubjectCreate>();
-
-  // We "watch" these fields to update the UI in real-time as the user selects them.
-  const selectedColor = watch('color') || COLORS[0];
-  const selectedIcon = watch('icon') || ICONS[0].name;
-
-  // ===================================================================================
-  // DATA FETCHING & SIDE EFFECTS
-  // `useEffect` is used to fetch data when the component mounts or dependencies change.
-  // ===================================================================================
-
-  // This effect triggers the data fetching process whenever the `showArchived` filter changes.
-  useEffect(() => {
-    fetchSubjects();
-  }, [showArchived]);
+    subjects,
+    isLoading,
+    error,
+    showArchived,
+    setShowArchived,
+    createSubject,
+    updateSubject,
+    deleteSubject,
+    toggleArchive,
+    clearError,
+  } = useSubjects();
+  
+  // ============================================================================
+  // LOCAL UI STATE
+  // Solo stato relativo alla UI, non business logic
+  // ============================================================================
+  
+  /**
+   * Controlla visibilità del modal.
+   * NOTA: Questo è stato UI, non business state
+   */
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  /**
+   * Subject attualmente in editing.
+   * null = creazione nuovo, Subject = modifica esistente
+   */
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
+  
+  /**
+   * ID del subject in eliminazione.
+   * Usato per feedback visivo durante eliminazione
+   */
+  const [deletingSubjectId, setDeletingSubjectId] = useState<number | null>(null);
+  
+  // ============================================================================
+  // FORM HOOK
+  // Gestisce tutta la logica del form
+  // ============================================================================
 
   /**
-   * Fetches the list of subjects from the API based on the current filter settings.
+   * Chiude il modal e resetta stato.
    */
-  const fetchSubjects = async () => {
-    setIsLoading(true);
-    try {
-      const response = await api.get<Subject[]>('/subjects', {
-        params: { include_archived: showArchived }
-      });
-      setSubjects(response.data);
-      setError(null); // Clear previous errors on success
-    } catch (error: any) {
-      setError('Failed to load subjects');
-      console.error('Error fetching subjects:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ===================================================================================
-  // EVENT HANDLERS & LOGIC
-  // These functions handle user interactions and API mutations (Create, Update, Delete).
-  // ===================================================================================
-
-  /**
-   * Opens the modal for either creating a new subject or editing an existing one.
-   * @param subject - (Optional) The subject to be edited. If not provided, the modal opens in "create" mode.
-   */
-  const openModal = (subject?: Subject) => {
-    if (subject) {
-      // "Edit" mode: Set the subject to be edited and populate the form fields.
-      setEditingSubject(subject);
-      Object.keys(subject).forEach((key) => {
-        setValue(key as any, (subject as any)[key]);
-      });
-    } else {
-      // "Create" mode: Clear any editing state and reset the form with default values.
-      setEditingSubject(null);
-      reset({
-        color: COLORS[0],
-        icon: ICONS[0].name,
-      });
-    }
-    setIsModalOpen(true);
-  };
-
-  /** Closes the modal and resets all related state. */
-  const closeModal = () => {
+  const handleCloseModal = useCallback(() => {
     setIsModalOpen(false);
     setEditingSubject(null);
-    reset();
-  };
+  }, []);
 
   /**
-   * Handles the form submission for both creating and updating subjects.
-   * @param data - The validated form data.
+   * Hook per gestione form.
+   * Configurato con callbacks per submit e cancel.
+   * 
+   * PATTERN: Dependency Injection via callbacks
    */
-  const onSubmit = async (data: SubjectCreate) => {
-    try {
-      if (editingSubject) {
-        // Update logic: Send a PUT request to the specific subject's endpoint.
-        const response = await api.put<Subject>(
-          `/subjects/${editingSubject.id}`,
-          data
-        );
-        // Update the local state optimistically to reflect the change immediately.
-        setSubjects(subjects.map(s => 
-          s.id === editingSubject.id ? response.data : s
-        ));
-      } else {
-        // Create logic: Send a POST request to create a new subject.
-        const response = await api.post<Subject>('/subjects', data);
-        // Add the new subject to the local state.
-        setSubjects([...subjects, response.data]);
+  const formHook = useSubjectForm({
+    onSubmit: async (data) => {
+      try {
+        if (editingSubject) {
+          // Modalità edit
+          await updateSubject(editingSubject.id, data);
+        } else {
+          // Modalità create
+          await createSubject(data);
+        }
+        // Chiudi modal su successo
+        handleCloseModal();
+        formHook.resetForm();
+      } catch (error) {
+        // Errore già gestito nel hook useSubjects
+        console.error('Form submission error:', error);
       }
-      closeModal();
-    } catch (error: any) {
-      console.error('Error saving subject:', error);
-      setError(error.response?.data?.detail || 'Failed to save subject');
-    }
-  };
-
+    },
+    onCancel: handleCloseModal,
+    initialValues: editingSubject || undefined,
+  });
+  
+  // ============================================================================
+  // EVENT HANDLERS
+  // Handler per eventi UI
+  // ============================================================================
+  
   /**
-   * Deletes a subject after user confirmation.
-   * @param id - The ID of the subject to delete.
+   * Apre il modal per creare nuovo subject.
+   * 
+   * useCallback previene ricreazioni inutili
    */
-  const deleteSubject = async (id: number) => {
-    // A simple `window.confirm` is used here for confirmation.
-    if (!window.confirm('Are you sure you want to delete this subject?')) {
-      return;
-    }
-
-    setDeletingSubjectId(id); // Used to disable the delete button during the API call.
+  const handleCreateClick = useCallback(() => {
+    setEditingSubject(null);
+    formHook.resetForm();
+    setIsModalOpen(true);
+  }, [formHook]);
+  
+  /**
+   * Apre il modal per editare subject esistente.
+   * 
+   * @param subject - Subject da editare
+   */
+  const handleEditClick = useCallback((subject: Subject) => {
+    setEditingSubject(subject);
+    formHook.setEditMode(subject);
+    setIsModalOpen(true);
+  }, [formHook]);
+  
+  /**
+   * Gestisce eliminazione con feedback visivo.
+   * 
+   * @param id - ID del subject da eliminare
+   */
+  const handleDeleteClick = useCallback(async (id: number) => {
+    setDeletingSubjectId(id);
     try {
-      await api.delete(`/subjects/${id}`);
-      // Remove the deleted subject from the local state.
-      setSubjects(subjects.filter(s => s.id !== id));
-    } catch (error: any) {
-      console.error('Error deleting subject:', error);
-      setError('Failed to delete subject');
+      await deleteSubject(id);
     } finally {
       setDeletingSubjectId(null);
     }
-  };
-
-  /**
-   * Toggles the `is_archived` status of a subject.
-   * @param subject - The subject to archive or unarchive.
-   */
-  const toggleArchive = async (subject: Subject) => {
-    try {
-      const response = await api.put<Subject>(
-        `/subjects/${subject.id}`,
-        { is_archived: !subject.is_archived }
-      );
-      // Update the local state to reflect the change.
-      setSubjects(subjects.map(s => 
-        s.id === subject.id ? response.data : s
-      ));
-    } catch (error: any) {
-      console.error('Error updating subject:', error);
-      setError('Failed to update subject');
-    }
-  };
-
-  // ===================================================================================
-  // MAIN RENDER
-  // The final JSX output of the component, with conditional rendering for different states.
-  // ===================================================================================
-
-  // Calculate global processing count across all subjects
-  const totalProcessingDocuments = subjects.reduce((acc, subject) => {
-    const docs = documentsBySubject[subject.id] || [];
-    const processing = docs.filter(doc => 
-      [ProcessingStatus.PENDING, ProcessingStatus.PARSING, 
-       ProcessingStatus.CHUNKING, ProcessingStatus.EMBEDDING].includes(doc.processing_status)
-    ).length;
-    return acc + processing;
-  }, 0);
-
+  }, [deleteSubject]);
+  
+  // ============================================================================
+  // RENDER
+  // UI minimale, principalmente composizione di componenti
+  // ============================================================================
+  
   return (
-    <div>
-      {/* Page Header with title and primary actions */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">My Subjects</h1>
-          <p className="text-gray-600 mt-1">
-            Manage your academic subjects and track your progress
-          </p>
-          {/* Global processing indicator */}
-          {totalProcessingDocuments > 0 && (
-            <p className="text-sm text-blue-600 mt-2 flex items-center">
-              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
-              {totalProcessingDocuments} document{totalProcessingDocuments > 1 ? 's' : ''} processing...
-            </p>
-          )}
-        </div>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => setShowArchived(!showArchived)}
-            className={clsx(
-              "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-              showArchived 
-                ? "bg-gray-200 text-gray-900" 
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            )}
-          >
-            <Archive className="w-4 h-4 inline mr-2" />
-            {showArchived ? 'Hide' : 'Show'} Archived
-          </button>
-          <button
-            onClick={() => openModal()}
-            className="btn-primary inline-flex items-center"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Add Subject
-          </button>
-        </div>
-      </div>
-
-      {/* Global Error Display */}
-      {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      {/* Conditional Rendering: Shows a loader, an empty state, or the subjects grid. */}
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      ) : subjects.length === 0 ? (
-        /* Empty state */
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12">
-          <div className="text-center">
-            <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              {showArchived ? 'No archived subjects' : 'No subjects yet'}
-            </h2>
-            <p className="text-gray-600 mb-6">
-              {showArchived 
-                ? 'You haven\'t archived any subjects yet'
-                : 'Start by adding your first subject to track your learning progress'}
-            </p>
-            {!showArchived && (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        {/* HEADER CON FILTRI */}
+        <SubjectFilters
+          showArchived={showArchived}
+          onToggleArchive={setShowArchived}
+          onCreateClick={handleCreateClick}
+          totalCount={subjects.length}
+        />
+        
+        {/* ERROR MESSAGE */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start">
+            <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm text-red-700">{error}</p>
               <button
-                onClick={() => openModal()}
-                className="btn-primary inline-flex items-center"
+                onClick={clearError}
+                className="mt-2 text-sm text-red-600 underline hover:no-underline"
               >
-                <Plus className="w-5 h-5 mr-2" />
-                Add Your First Subject
+                Dismiss
               </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        /* Subjects grid - NOW USING THE EXTRACTED COMPONENT */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {subjects.map((subject) => (
-            <SubjectCard 
-              key={subject.id} 
-              subject={subject}
-              onEdit={openModal}
-              onDelete={deleteSubject}
-              onArchive={toggleArchive}
-              deletingSubjectId={deletingSubjectId}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Create/Edit Modal: Rendered conditionally based on `isModalOpen` state. */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {editingSubject ? 'Edit Subject' : 'Add New Subject'}
-                </h2>
-                <button
-                  onClick={closeModal}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
-              </div>
             </div>
-            {/* Modal Form */}
-            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
-              {/* Form fields are registered here */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Subject Name *
-                </label>
-                <input
-                  {...register('name', { required: 'Subject name is required' })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Mathematics, Physics, Literature"
-                />
-                {errors.name && (
-                  <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
-                )}
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  {...register('description')}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Brief description of the subject..."
-                />
-              </div>
-
-              {/* Academic Year and Level */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Academic Year
-                  </label>
-                  <input
-                    {...register('academic_year')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., 2024-2025"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Level
-                  </label>
-                  <input
-                    {...register('level')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., Grade 11, Year 2"
-                  />
-                </div>
-              </div>
-
-              {/* Category */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Category
-                </label>
-                <select
-                  {...register('category')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select a category</option>
-                  <option value="Mathematics">Mathematics</option>
-                  <option value="Science">Science</option>
-                  <option value="Languages">Languages</option>
-                  <option value="Social Studies">Social Studies</option>
-                  <option value="Arts">Arts</option>
-                  <option value="Technology">Technology</option>
-                  <option value="Physical Education">Physical Education</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              {/* Custom color picker */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Color Theme
-                </label>
-                <div className="flex space-x-2">
-                  {COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setValue('color', color)}
-                      className={clsx(
-                        "w-10 h-10 rounded-lg border-2 transition-all",
-                        selectedColor === color
-                          ? "border-gray-800 scale-110"
-                          : "border-transparent"
-                      )}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Custom icon picker */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Icon
-                </label>
-                <div className="grid grid-cols-8 gap-2">
-                  {ICONS.map(({ name, icon }) => (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => setValue('icon', name)}
-                      className={clsx(
-                        "p-3 rounded-lg border-2 text-2xl transition-all hover:bg-gray-50",
-                        selectedIcon === name
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200"
-                      )}
-                    >
-                      {icon}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Modal Actions */}
-              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-900"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className={clsx(
-                    "px-6 py-2 rounded-lg font-medium text-white transition-colors",
-                    isSubmitting
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-blue-600 hover:bg-blue-700"
-                  )}
-                >
-                  {isSubmitting ? 'Saving...' : editingSubject ? 'Update' : 'Create'} Subject
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        )}
+        
+        {/* MAIN CONTENT - LIST O EMPTY STATE */}
+        {subjects.length === 0 && !isLoading ? (
+          <SubjectEmptyState
+            isArchiveView={showArchived}
+            onCreateClick={handleCreateClick}
+            onToggleArchive={() => setShowArchived(!showArchived)}
+          />
+        ) : (
+          <SubjectList
+            subjects={subjects}
+            isLoading={isLoading}
+            onEdit={handleEditClick}
+            onDelete={handleDeleteClick}
+            onArchive={toggleArchive}
+            deletingSubjectId={deletingSubjectId}
+          />
+        )}
+        
+        {/* MODAL - SEMPRE RENDERIZZATO MA CONTROLLATO DA isOpen */}
+        <SubjectModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          onSubmit={formHook.onSubmit}
+          title={editingSubject ? 'Edit Subject' : 'Add New Subject'}
+          isEditMode={!!editingSubject}
+          register={formHook.register}
+          handleSubmit={formHook.handleSubmit}
+          errors={formHook.formState.errors}
+          isSubmitting={formHook.formState.isSubmitting}
+          selectedColor={formHook.selectedColor}
+          selectedIcon={formHook.selectedIcon}
+          onColorChange={(color) => formHook.setValue('color', color)}
+          onIconChange={(icon) => formHook.setValue('icon', icon)}
+        />
+        
+      </div>
     </div>
   );
 };
 
+/**
+ * Export default per lazy loading e code splitting.
+ * React.lazy() richiede export default.
+ */
 export default SubjectsPage;
