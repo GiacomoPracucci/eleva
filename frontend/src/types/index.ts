@@ -238,6 +238,17 @@ export interface QuizResultSummary {
   questionResults: QuizQuestionResult[];
 }
 
+export interface QuizExplanationRequest {
+  documentContext: string;
+  questionText: string;
+  userSelectedAnswer: string;
+  correctAnswer: string;
+}
+
+export interface QuizExplanationResponse {
+  explanation: string;
+}
+
 /**
  * Tracks upload progress for file uploads.
  * Used to show progress bars during file upload.

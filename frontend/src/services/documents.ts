@@ -8,7 +8,7 @@
  */
 
 import api from '@/services/api';
-import { DocumentQuiz, DocumentQuizRequest } from '@/types';
+import { DocumentChunk, DocumentQuiz, DocumentQuizRequest } from '@/types';
 
 /**
  * Request an AI-generated quiz for a document.
@@ -29,6 +29,21 @@ export const generateQuizFromDocument = async (
   return response.data;
 };
 
+/**
+ * Fetch the full set of chunks for a document, including their text content.
+ *
+ * @param documentId - The UUID of the document
+ * @returns All chunks with text included
+ */
+export const fetchDocumentChunks = async (documentId: string): Promise<DocumentChunk[]> => {
+  const response = await api.get<DocumentChunk[]>(`/documents/${documentId}/chunks`, {
+    params: { include_text: true },
+  });
+
+  return response.data;
+};
+
 export default {
   generateQuizFromDocument,
+  fetchDocumentChunks,
 };

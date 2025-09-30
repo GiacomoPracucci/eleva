@@ -111,6 +111,10 @@ class Settings(BaseSettings):
     QUIZ_GENERATION_TEMPERATURE: float = 0.2
     QUIZ_MAX_INPUT_CHARACTERS: int = 12000
     QUIZ_MAX_QUESTIONS: int = 20
+
+    QUIZ_EXPLANATION_MODEL: str = "gpt-4o-mini"
+    QUIZ_EXPLANATION_TEMPERATURE: float = 0.2
+    QUIZ_EXPLANATION_MAX_TOKENS: int = 350
     
     # Document processing settings
     MAX_FILE_SIZE_MB: int = 50

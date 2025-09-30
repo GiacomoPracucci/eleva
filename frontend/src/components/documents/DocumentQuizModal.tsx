@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle, HelpCircle, Loader2, X } from 'lucide-react';
 import clsx from 'clsx';
+import { isAxiosError } from 'axios';
 
 import { Document, DocumentQuiz, QuizResultSummary } from '@/types';
 import { useDocumentQuiz } from '@/hooks/documents/useDocumentQuiz';
+import { fetchDocumentChunks } from '@/services/documents';
+import { requestQuizQuestionExplanation } from '@/services/quizzes';
 
 interface DocumentQuizModalProps {
   document: Document | null;
@@ -16,6 +19,31 @@ type AnswerState = Record<string, string | null>;
 const QUESTION_PRESETS = [3, 5, 7, 10];
 const MAX_QUESTIONS = 20;
 
+interface QuestionExplanationState {
+  isExpanded: boolean;
+  isLoading: boolean;
+  explanation: string | null;
+  error: string | null;
+}
+
+interface DocumentContextResult {
+  value: string | null;
+  error: string | null;
+}
+
+const getErrorMessage = (error: unknown): string => {
+  if (isAxiosError(error)) {
+    const detail = (error.response?.data as { detail?: string })?.detail;
+    return detail || error.message || 'An unexpected error occurred.';
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'An unexpected error occurred.';
+};
+
 /**
  * Modal that orchestrates quiz generation, participation and results display.
  */
@@ -24,9 +52,80 @@ export const DocumentQuizModal: React.FC<DocumentQuizModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const activeDocumentIdRef = useRef<string | null>(document?.id ?? null);
+  const documentContextPromise = useRef<Promise<DocumentContextResult> | null>(null);
   const [questionCount, setQuestionCount] = useState<number>(5);
   const [answers, setAnswers] = useState<AnswerState>({});
   const [results, setResults] = useState<QuizResultSummary | null>(null);
+  const [explanations, setExplanations] = useState<Record<string, QuestionExplanationState>>({});
+  const [documentContext, setDocumentContext] = useState<string | null>(null);
+  const [isFetchingContext, setIsFetchingContext] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
+
+  const resetExplanationState = useCallback(() => {
+    setExplanations({});
+    setDocumentContext(null);
+    setContextError(null);
+    setIsFetchingContext(false);
+    documentContextPromise.current = null;
+  }, []);
+
+  const loadDocumentContext = useCallback(async (): Promise<DocumentContextResult> => {
+    if (!document) {
+      const message = 'Document is no longer available.';
+      setContextError(message);
+      return { value: null, error: message };
+    }
+
+    if (documentContext) {
+      return { value: documentContext, error: null };
+    }
+
+    if (documentContextPromise.current) {
+      return documentContextPromise.current;
+    }
+
+    const targetDocumentId = document.id;
+    const fetchPromise: Promise<DocumentContextResult> = (async () => {
+      setIsFetchingContext(true);
+      setContextError(null);
+
+      const isCurrentDocument = () => activeDocumentIdRef.current === targetDocumentId;
+
+      try {
+        const chunks = await fetchDocumentChunks(document.id);
+        const combinedText = chunks.map((chunk) => chunk.chunk_text).join('\n\n').trim();
+
+        if (!combinedText) {
+          const message = 'The document does not contain readable text for explanations.';
+          if (isCurrentDocument()) {
+            setContextError(message);
+            setDocumentContext(null);
+          }
+          return { value: null, error: message };
+        }
+
+        if (isCurrentDocument()) {
+          setDocumentContext(combinedText);
+          setContextError(null);
+        }
+        return { value: combinedText, error: null };
+      } catch (error) {
+        const message = getErrorMessage(error);
+        if (isCurrentDocument()) {
+          setContextError(message);
+          setDocumentContext(null);
+        }
+        return { value: null, error: message };
+      } finally {
+        setIsFetchingContext(false);
+        documentContextPromise.current = null;
+      }
+    })();
+
+    documentContextPromise.current = fetchPromise;
+    return fetchPromise;
+  }, [document, documentContext]);
 
   const {
     quiz,
@@ -43,14 +142,22 @@ export const DocumentQuizModal: React.FC<DocumentQuizModalProps> = ({
 
       setAnswers(initialAnswers);
       setResults(null);
+      resetExplanationState();
     },
   });
+
+const resetState = useCallback(() => {
+    setAnswers({});
+    setResults(null);
+    setQuestionCount(5);
+    resetExplanationState();
+  }, [resetExplanationState]);
 
   useEffect(() => {
     if (!isOpen) {
       resetState();
     }
-  }, [isOpen]);
+  }, [isOpen, resetState]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -58,11 +165,10 @@ export const DocumentQuizModal: React.FC<DocumentQuizModalProps> = ({
     }
   }, [isOpen, resetQuiz]);
 
-  const resetState = useCallback(() => {
-    setAnswers({});
-    setResults(null);
-    setQuestionCount(5);
-  }, []);
+  useEffect(() => {
+    activeDocumentIdRef.current = document?.id ?? null;
+    resetExplanationState();
+  }, [document?.id, resetExplanationState]);
 
   const handleBackdropClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
@@ -124,7 +230,117 @@ export const DocumentQuizModal: React.FC<DocumentQuizModalProps> = ({
 
     setAnswers(resetAnswers);
     setResults(null);
-  }, [quiz]);
+    resetExplanationState();
+  }, [quiz, resetExplanationState]);
+
+  const handleToggleExplanation = useCallback(
+    async (question: DocumentQuiz['questions'][number]) => {
+      if (!results) return;
+
+      const questionResult = results.questionResults.find(
+        (item) => item.questionId === question.questionId
+      );
+
+      if (!questionResult || questionResult.isCorrect) {
+        return;
+      }
+
+      const currentState = explanations[question.questionId];
+      const nextExpanded = !(currentState?.isExpanded ?? false);
+
+      setExplanations((prev) => ({
+        ...prev,
+        [question.questionId]: {
+          isExpanded: nextExpanded,
+          isLoading: nextExpanded && !currentState?.explanation,
+          explanation: currentState?.explanation ?? null,
+          error: nextExpanded ? null : currentState?.error ?? null,
+        },
+      }));
+
+      if (!nextExpanded || currentState?.explanation) {
+        return;
+      }
+
+      const { value: context, error: contextLoadError } = await loadDocumentContext();
+      if (!context) {
+        const message = contextLoadError || contextError || 'Unable to load document context for this explanation.';
+        setExplanations((prev) => ({
+          ...prev,
+          [question.questionId]: {
+            isExpanded: true,
+            isLoading: false,
+            explanation: null,
+            error: message,
+          },
+        }));
+        return;
+      }
+
+      if (!questionResult.selectedOptionId) {
+        setExplanations((prev) => ({
+          ...prev,
+          [question.questionId]: {
+            isExpanded: true,
+            isLoading: false,
+            explanation: null,
+            error: 'No answer selection was recorded for this question.',
+          },
+        }));
+        return;
+      }
+
+      const selectedOption = question.options.find(
+        (option) => option.optionId === questionResult.selectedOptionId
+      );
+      const correctOption = question.options.find(
+        (option) => option.optionId === question.correctOptionId
+      );
+
+      if (!selectedOption || !correctOption) {
+        setExplanations((prev) => ({
+          ...prev,
+          [question.questionId]: {
+            isExpanded: true,
+            isLoading: false,
+            explanation: null,
+            error: 'Could not determine the selected or correct answer text.',
+          },
+        }));
+        return;
+      }
+
+      try {
+        const response = await requestQuizQuestionExplanation({
+          documentContext: context,
+          questionText: question.questionText,
+          userSelectedAnswer: selectedOption.optionText,
+          correctAnswer: correctOption.optionText,
+        });
+
+        setExplanations((prev) => ({
+          ...prev,
+          [question.questionId]: {
+            isExpanded: true,
+            isLoading: false,
+            explanation: response.explanation,
+            error: null,
+          },
+        }));
+      } catch (error) {
+        setExplanations((prev) => ({
+          ...prev,
+          [question.questionId]: {
+            isExpanded: true,
+            isLoading: false,
+            explanation: null,
+            error: getErrorMessage(error),
+          },
+        }));
+      }
+    },
+    [contextError, explanations, loadDocumentContext, results]
+  );
 
   const renderOption = (quizData: DocumentQuiz, questionId: string, optionId: string) => {
     const question = quizData.questions.find((item) => item.questionId === questionId);
@@ -176,6 +392,11 @@ export const DocumentQuizModal: React.FC<DocumentQuizModalProps> = ({
       const questionResult = results?.questionResults.find((item) => item.questionId === question.questionId);
       const isCorrect = questionResult?.isCorrect ?? false;
       const isResolved = Boolean(results);
+      const explanationState = explanations[question.questionId];
+      const isExplanationExpanded = explanationState?.isExpanded ?? false;
+      const isExplanationLoading = explanationState?.isLoading ?? false;
+      const explanationError = explanationState?.error ?? null;
+      const explanationText = explanationState?.explanation ?? null;
 
       return (
         <div key={question.questionId} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -204,20 +425,54 @@ export const DocumentQuizModal: React.FC<DocumentQuizModalProps> = ({
           </div>
 
           {isResolved && questionResult && !questionResult.isCorrect && (
-            <div className="mt-4 flex items-center justify-between rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" />
-                <span>The correct answer has been highlighted above.</span>
+            <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>The correct answer has been highlighted above.</span>
+                </div>
+                <button
+                  type="button"
+                  className={clsx(
+                    'inline-flex items-center gap-2 rounded-md border border-yellow-300 px-3 py-1 text-xs font-medium text-yellow-700 transition',
+                    {
+                      'cursor-not-allowed opacity-60': isExplanationLoading || isFetchingContext,
+                    }
+                  )}
+                  onClick={() => void handleToggleExplanation(question)}
+                  disabled={isExplanationLoading || isFetchingContext}
+                >
+                  {isExplanationLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <HelpCircle className="h-4 w-4" />
+                  )}
+                  {isExplanationExpanded ? 'Hide explanation' : 'Why was this wrong?'}
+                </button>
               </div>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-md border border-yellow-300 px-3 py-1 text-xs font-medium text-yellow-700 opacity-60"
-                disabled
-                title="Explanations will arrive soon!"
-              >
-                <HelpCircle className="h-4 w-4" />
-                Why was this wrong?
-              </button>
+
+              {isExplanationExpanded && (
+                <div className="mt-3 rounded-md border border-yellow-200 bg-white/80 p-3 text-sm text-gray-800">
+                  {isExplanationLoading || (isFetchingContext && !explanationText) ? (
+                    <div className="flex items-center gap-2 text-yellow-700">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Generating explanation...</span>
+                    </div>
+                  ) : explanationError ? (
+                    <div className="flex items-center gap-2 text-red-600">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>{explanationError}</span>
+                    </div>
+                  ) : explanationText ? (
+                    <p className="whitespace-pre-line text-gray-700">{explanationText}</p>
+                  ) : (
+                    <div className="flex items-center gap-2 text-yellow-700">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>Explanation will appear here shortly.</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -328,7 +583,7 @@ export const DocumentQuizModal: React.FC<DocumentQuizModalProps> = ({
                   <p className="mt-1 text-2xl font-semibold">
                     {results.correctCount} / {results.totalQuestions} correct answers
                   </p>
-                  <p className="text-sm text-blue-700">Keep practicing to unlock the upcoming explanations feature!</p>
+                  <p className="text-sm text-blue-700">Review the explanations below to reinforce the correct answers.</p>
                 </div>
               )}
 
@@ -359,6 +614,7 @@ export const DocumentQuizModal: React.FC<DocumentQuizModalProps> = ({
                       resetQuiz();
                       setResults(null);
                       setAnswers({});
+                      resetExplanationState();
                     }}
                   >
                     Generate a new quiz

@@ -56,3 +56,20 @@ class QuizGenerationRequest(BaseModel):
         le=settings.QUIZ_MAX_QUESTIONS,
         description="Number of questions the quiz should contain."
     )
+
+
+class QuestionExplanationRequest(BaseModel):
+    """Request payload for explaining an incorrect quiz answer."""
+
+    document_context: str = Field(..., alias="documentContext", min_length=1)
+    question_text: str = Field(..., alias="questionText", min_length=1)
+    user_selected_answer: str = Field(..., alias="userSelectedAnswer", min_length=1)
+    correct_answer: str = Field(..., alias="correctAnswer", min_length=1)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class QuestionExplanationResponse(BaseModel):
+    """Response payload containing the AI-generated explanation."""
+
+    explanation: str = Field(..., min_length=1)
