@@ -5,6 +5,8 @@
     [] BUG durante login con utente admin (password required e bisogna schiacchiare login 3 volte)
     [] BUG durante logout con utente admin (torna alla schermata di login e al rientro è di nuovo in admin panel)
 
+[] Se volessi dockerizzare, dovrei togliere la dipendenza da aws --> serve poter decidere se usare aws o storage locale
+
 [] Capire e sistemare CORS (se indico indirizzi non va)
 
 [] Documentare parti mancanti in ProfilePage.tsx
