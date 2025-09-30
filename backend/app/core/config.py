@@ -106,6 +106,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIMENSIONS: int = 1536
+
+    QUIZ_GENERATION_MODEL: str = "gpt-4o-mini"
+    QUIZ_GENERATION_TEMPERATURE: float = 0.2
+    QUIZ_MAX_INPUT_CHARACTERS: int = 12000
+    QUIZ_MAX_QUESTIONS: int = 20
     
     # Document processing settings
     MAX_FILE_SIZE_MB: int = 50

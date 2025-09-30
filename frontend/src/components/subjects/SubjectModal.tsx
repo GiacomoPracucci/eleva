@@ -19,7 +19,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
-import { SubjectCreate } from '@/types';
 import { COLORS, ICONS } from '@/constants/subjects';
 
 /**
@@ -38,12 +37,6 @@ interface SubjectModalProps {
    * Il parent gestisce lo stato, non il modal stesso.
    */
   onClose: () => void;
-  
-  /**
-   * Callback per submit del form.
-   * Riceve i dati validati e restituisce una Promise.
-   */
-  onSubmit: (data: SubjectCreate) => Promise<void>;
   
   /**
    * Titolo del modal.
@@ -121,7 +114,6 @@ interface SubjectModalProps {
 export const SubjectModal: React.FC<SubjectModalProps> = ({
   isOpen,
   onClose,
-  onSubmit,
   title = 'Add New Subject',
   isEditMode = false,
   register,
@@ -386,7 +378,7 @@ export const SubjectModal: React.FC<SubjectModalProps> = ({
               Cancel
             </button>
             <button
-              onClick={handleSubmit}
+              type="submit"
               disabled={isSubmitting}
               className={clsx(
                 "px-6 py-2 rounded-lg font-medium text-white transition-colors",

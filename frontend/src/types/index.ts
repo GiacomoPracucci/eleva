@@ -200,6 +200,44 @@ export interface DocumentProcessingStatus {
   progress_percentage?: number;        // 0-100 progress indicator
 }
 
+// ============================================================================
+// QUIZ TYPES
+// ============================================================================
+
+export interface QuizOption {
+  optionId: string;
+  optionText: string;
+}
+
+export interface QuizQuestion {
+  questionId: string;
+  questionText: string;
+  options: QuizOption[];
+  correctOptionId: string;
+}
+
+export interface DocumentQuiz {
+  quizTitle: string;
+  questions: QuizQuestion[];
+}
+
+export interface DocumentQuizRequest {
+  question_count: number;
+}
+
+export interface QuizQuestionResult {
+  questionId: string;
+  selectedOptionId: string | null;
+  correctOptionId: string;
+  isCorrect: boolean;
+}
+
+export interface QuizResultSummary {
+  correctCount: number;
+  totalQuestions: number;
+  questionResults: QuizQuestionResult[];
+}
+
 /**
  * Tracks upload progress for file uploads.
  * Used to show progress bars during file upload.

@@ -41,6 +41,8 @@ from app.schemas.document import (
 from app.services.document_parser import document_parser, DocumentParsingError
 from app.services.text_chunker import text_chunker
 from app.services.embedding_service import get_embedding_service
+from app.schemas.quiz import QuizGenerationRequest, QuizResponse
+from app.services.quiz_generation import QuizGenerationService, QuizGenerationError
 
 logger = logging.getLogger(__name__)
 
@@ -552,6 +554,48 @@ async def get_document_chunks(
         responses.append(response)
     
     return responses
+
+
+@router.post("/documents/{document_id}/generate-quiz", response_model=QuizResponse)
+async def generate_quiz_for_document(
+    document_id: UUID,
+    request: QuizGenerationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserModel = Depends(get_current_active_user)
+):
+    """Generate a multiple-choice quiz from a processed document."""
+
+    document = await document_crud.get(db, document_id=document_id)
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    if not (document_crud.is_owner(document, current_user.id) or current_user.is_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to generate a quiz for this document"
+        )
+
+    service = QuizGenerationService()
+
+    try:
+        quiz = await service.generate_quiz(
+            document=document,
+            question_count=request.question_count
+        )
+    except QuizGenerationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc)
+        ) from exc
+    finally:
+        await service.aclose()
+
+    return quiz
+
 
 
 @router.delete("/documents/{document_id}")

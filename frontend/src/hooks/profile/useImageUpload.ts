@@ -158,6 +158,15 @@ export function useImageUpload(config: ImageUploadConfig = {}): UseImageUploadRe
     onUploadSuccess,
     onUploadError
   } = config;
+
+  useEffect(() => {
+    if (compress) {
+      console.warn(
+        'Image compression is not implemented yet. Received configuration:',
+        { compress, compressionQuality }
+      );
+    }
+  }, [compress, compressionQuality]);
   
   // ============================================================================
   // GLOBAL STATE

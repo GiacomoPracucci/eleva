@@ -145,7 +145,6 @@ const SubjectsPage: React.FC = () => {
         console.error('Form submission error:', error);
       }
     },
-    onCancel: handleCloseModal,
     initialValues: editingSubject || undefined,
   });
   
@@ -245,7 +244,6 @@ const SubjectsPage: React.FC = () => {
         <SubjectModal
           isOpen={isModalOpen}
           onClose={handleCloseModal}
-          onSubmit={formHook.onSubmit}
           title={editingSubject ? 'Edit Subject' : 'Add New Subject'}
           isEditMode={!!editingSubject}
           register={formHook.register}

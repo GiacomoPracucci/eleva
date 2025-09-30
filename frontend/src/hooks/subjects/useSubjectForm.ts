@@ -26,7 +26,6 @@ import { COLORS, ICONS } from '@/constants/subjects';
  */
 interface UseSubjectFormConfig {
   onSubmit: (data: SubjectCreate) => Promise<void>;
-  onCancel?: () => void;
   initialValues?: Partial<Subject>;
 }
 
@@ -74,7 +73,7 @@ interface UseSubjectFormReturn {
  * @returns Oggetto con tutto il necessario per il form
  */
 export function useSubjectForm(config: UseSubjectFormConfig): UseSubjectFormReturn {
-  const { onSubmit, onCancel, initialValues } = config;
+  const { onSubmit, initialValues } = config;
   
   // ============================================================================
   // FORM STATE
@@ -124,12 +123,6 @@ export function useSubjectForm(config: UseSubjectFormConfig): UseSubjectFormRetu
    * Influenza il comportamento del form e i label.
    */
   const [isEditMode, setIsEditMode] = useState(!!initialValues);
-  
-  /**
-   * Traccia il subject originale in edit.
-   * Utile per confronti e reset.
-   */
-  const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   
   // ============================================================================
   // WATCHED VALUES
@@ -186,7 +179,6 @@ export function useSubjectForm(config: UseSubjectFormConfig): UseSubjectFormRetu
       icon: ICONS[0].name,
     });
     setIsEditMode(false);
-    setEditingSubject(null);
   }, [reset]);
   
   /**
@@ -198,7 +190,6 @@ export function useSubjectForm(config: UseSubjectFormConfig): UseSubjectFormRetu
     if (subject) {
       // Modalità edit: popola il form
       setIsEditMode(true);
-      setEditingSubject(subject);
       
       // Popola tutti i campi del form
       Object.keys(subject).forEach((key) => {
