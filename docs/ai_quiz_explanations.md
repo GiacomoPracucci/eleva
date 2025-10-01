@@ -35,10 +35,11 @@ Payload schema (`QuestionExplanationRequest`):
 
 ```json
 {
-  "documentContext": "<excerpt used as the answer source>",
+  "documentId": "<source document UUID>",
   "questionText": "<quiz prompt>",
   "userSelectedAnswer": "<student's incorrect option text>",
-  "correctAnswer": "<correct option text>"
+  "correctAnswer": "<correct option text>",
+  "maxChunks": 10 // optional override, defaults to server setting
 }
 ```
 
@@ -64,9 +65,10 @@ Response (`QuestionExplanationResponse`):
 
 `backend/app/services/quiz_explanation.py` encapsulates interaction with OpenAI:
 
-- Accepts configuration overrides but defaults to the new settings block (`QUIZ_EXPLANATION_MODEL`, `QUIZ_EXPLANATION_TEMPERATURE`, `QUIZ_EXPLANATION_MAX_TOKENS`).
-- Validates that `document_context` is present (the LLM is worthless without source text).
-- Builds a deterministic prompt using the specification provided in the feature brief. The prompt enforces tone, structure, brevity, and ensures no extra preamble leaks into the response.
+- Accepts configuration overrides but defaults to the settings block (`QUIZ_EXPLANATION_MODEL`, `QUIZ_EXPLANATION_TEMPERATURE`, `QUIZ_EXPLANATION_MAX_TOKENS`, `QUIZ_EXPLANATION_MAX_CONTEXT_CHUNKS`).
+- Uses `DocumentRetrievalService` to embed the `(question + correct answer)` query and fetch the top-N similar chunks for the document.
+- Numbers and formats the retrieved snippets so the tutor prompt can cite `[Chunk N]` in its explanation.
+- Builds a supportive tutor prompt that asks the LLM to refute the student's answer, justify the correct answer, and ground both steps in the referenced chunks.
 - Calls `OpenAIClient.get_completion` with the crafted prompt and system message.
 - Raises `QuizExplanationError` on API/validation failures so the router can translate them into HTTP errors.
 - Exposes an `aclose` coroutine to release provider resources (mirrors the quiz generation service pattern).
@@ -90,36 +92,30 @@ Response (`QuestionExplanationResponse`):
 - `frontend/src/services/quizzes.ts`
   - Contains `requestQuizQuestionExplanation(payload)`, a thin Axios wrapper targeting `/quizzes/questions/explain-error`.
 
-- `frontend/src/services/documents.ts`
-  - Adds `fetchDocumentChunks(documentId)` to retrieve all chunk text. The quiz modal uses this to gather document context exactly once per document.
-
 ### 3.2 UI/State Management (`DocumentQuizModal.tsx`)
 
-Key additions:
+Key adjustments:
 
 - **State buckets**
-  - `documentContext`: Combined chunk text cached per open document.
-  - `explanations`: Record keyed by `questionId` storing `{ isExpanded, isLoading, explanation, error }`.
-  - `documentContextPromise` ref: Ensures a single in-flight chunk fetch even if multiple explanations are requested concurrently.
-  - `activeDocumentIdRef`: Prevents race conditions when the user switches documents while a fetch is pending.
+  - `explanations`: Record keyed by `questionId` storing `{ isExpanded, isLoading, explanation, error }` for cached responses.
+  - The previous `documentContext` cache and associated refs were removed; retrieval is now server-driven.
 
 - **Lifecycle integration**
-  - Resets explanation state whenever the modal closes, a new quiz loads, the quiz is retaken, or a new document is selected.
+  - Explanation state resets whenever the modal closes, a new quiz loads, the quiz is retaken, or a different document is selected.
 
 - **Explanation fetch path**
   1. Toggle expands the explanation panel.
-  2. Modal ensures document context is available (fetches chunks via `fetchDocumentChunks` if needed, with loading/error handling and caching).
-  3. Builds the explanation payload using question text, selected option text, and correct option text.
-  4. Calls `requestQuizQuestionExplanation`; caches the successful response or displays error messaging on failure.
+  2. The modal packages `documentId`, `questionText`, `userSelectedAnswer`, and `correctAnswer` into the explanation request.
+  3. Backend performs semantic search and prompt orchestration; the UI caches the resulting explanation per question or surfaces any errors.
 
 - **UI/UX**
-  - Button shows spinner while explanation loads and is disabled during context or explanation fetches.
-  - Accordion view renders explanation text, loading indicator, or error message with contextual iconography.
-  - Quiz summary copy updated to guide students toward reviewing explanations.
+  - Button shows a spinner while the explanation request is in flight and disables repeat clicks until it resolves.
+  - Accordion view renders explanation text, loading indicator, or error messaging with contextual iconography.
+  - Quiz summary copy continues to guide students toward reviewing explanations.
 
 ### 3.3 Error Handling & Caching
 
-- Context fetch errors are surfaced in the accordion so the user understands why no explanation is available.
+- Retrieval or provider errors bubble up as inline accordion messages so the user understands why no explanation is available.
 - Axios errors are normalized to human-readable strings via `getErrorMessage`.
 - Once an explanation is fetched, subsequent toggles are instant (no re-fetch) unless the quiz/document state resets.
 
@@ -127,16 +123,13 @@ Key additions:
 
 ## 4. Prompt Engineering Recap
 
-The service composes a prompt adhering to the spec:
+The service now builds a prompt that:
 
-```
-Role: helpful tutor
-Context: <document excerpt>
-Task: explain why the student answer is wrong and the correct one is right
-Instructions: supportive tone, 2-4 sentences, reference the excerpt, no extra preamble
-```
+- Injects the top-N retrieved chunks, each prefixed with `[Chunk index]` so the LLM can reference them explicitly.
+- Asks the model to explain why the student's answer is incorrect and why the correct answer fits, citing chunk numbers in brackets.
+- Encourages a supportive tone across 3–5 sentences while forbidding any information outside the provided context.
 
-A dedicated system message reiterates conciseness and reliance on provided context. The prompt trims incoming strings to avoid runaway whitespace and enforces positive, supportive phrasing.
+The system message reinforces chunk citations and forbids extra preamble so responses stay grounded and concise.
 
 ---
 
@@ -145,11 +138,10 @@ A dedicated system message reiterates conciseness and reliance on provided conte
 ```
 DocumentQuizModal
    └─(click)─► handleToggleExplanation(question)
-         ├─► loadDocumentContext()
-         │     └─► fetchDocumentChunks(documentId)  (one-time cache)
-         └─► requestQuizQuestionExplanation(payload)
+         └─► requestQuizQuestionExplanation({ documentId, questionText, ... })
                   └─► POST /api/v1/quizzes/questions/explain-error
                             └─► QuizExplanationService.explain_answer()
+                                   ├─► DocumentRetrievalService.top_chunks()
                                    └─► OpenAIClient.get_completion()
 ```
 

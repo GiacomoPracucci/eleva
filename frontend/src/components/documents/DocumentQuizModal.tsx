@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle, HelpCircle, Loader2, X } from 'lucide-react';
 import clsx from 'clsx';
 import { isAxiosError } from 'axios';
 
 import { Document, DocumentQuiz, QuizResultSummary } from '@/types';
 import { useDocumentQuiz } from '@/hooks/documents/useDocumentQuiz';
-import { fetchDocumentChunks } from '@/services/documents';
 import { requestQuizQuestionExplanation } from '@/services/quizzes';
 
 interface DocumentQuizModalProps {
@@ -23,11 +22,6 @@ interface QuestionExplanationState {
   isExpanded: boolean;
   isLoading: boolean;
   explanation: string | null;
-  error: string | null;
-}
-
-interface DocumentContextResult {
-  value: string | null;
   error: string | null;
 }
 
@@ -52,80 +46,14 @@ export const DocumentQuizModal: React.FC<DocumentQuizModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const activeDocumentIdRef = useRef<string | null>(document?.id ?? null);
-  const documentContextPromise = useRef<Promise<DocumentContextResult> | null>(null);
   const [questionCount, setQuestionCount] = useState<number>(5);
   const [answers, setAnswers] = useState<AnswerState>({});
   const [results, setResults] = useState<QuizResultSummary | null>(null);
   const [explanations, setExplanations] = useState<Record<string, QuestionExplanationState>>({});
-  const [documentContext, setDocumentContext] = useState<string | null>(null);
-  const [isFetchingContext, setIsFetchingContext] = useState(false);
-  const [contextError, setContextError] = useState<string | null>(null);
 
   const resetExplanationState = useCallback(() => {
     setExplanations({});
-    setDocumentContext(null);
-    setContextError(null);
-    setIsFetchingContext(false);
-    documentContextPromise.current = null;
   }, []);
-
-  const loadDocumentContext = useCallback(async (): Promise<DocumentContextResult> => {
-    if (!document) {
-      const message = 'Document is no longer available.';
-      setContextError(message);
-      return { value: null, error: message };
-    }
-
-    if (documentContext) {
-      return { value: documentContext, error: null };
-    }
-
-    if (documentContextPromise.current) {
-      return documentContextPromise.current;
-    }
-
-    const targetDocumentId = document.id;
-    const fetchPromise: Promise<DocumentContextResult> = (async () => {
-      setIsFetchingContext(true);
-      setContextError(null);
-
-      const isCurrentDocument = () => activeDocumentIdRef.current === targetDocumentId;
-
-      try {
-        const chunks = await fetchDocumentChunks(document.id);
-        const combinedText = chunks.map((chunk) => chunk.chunk_text).join('\n\n').trim();
-
-        if (!combinedText) {
-          const message = 'The document does not contain readable text for explanations.';
-          if (isCurrentDocument()) {
-            setContextError(message);
-            setDocumentContext(null);
-          }
-          return { value: null, error: message };
-        }
-
-        if (isCurrentDocument()) {
-          setDocumentContext(combinedText);
-          setContextError(null);
-        }
-        return { value: combinedText, error: null };
-      } catch (error) {
-        const message = getErrorMessage(error);
-        if (isCurrentDocument()) {
-          setContextError(message);
-          setDocumentContext(null);
-        }
-        return { value: null, error: message };
-      } finally {
-        setIsFetchingContext(false);
-        documentContextPromise.current = null;
-      }
-    })();
-
-    documentContextPromise.current = fetchPromise;
-    return fetchPromise;
-  }, [document, documentContext]);
 
   const {
     quiz,
@@ -145,8 +73,7 @@ export const DocumentQuizModal: React.FC<DocumentQuizModalProps> = ({
       resetExplanationState();
     },
   });
-
-const resetState = useCallback(() => {
+  const resetState = useCallback(() => {
     setAnswers({});
     setResults(null);
     setQuestionCount(5);
@@ -166,7 +93,6 @@ const resetState = useCallback(() => {
   }, [isOpen, resetQuiz]);
 
   useEffect(() => {
-    activeDocumentIdRef.current = document?.id ?? null;
     resetExplanationState();
   }, [document?.id, resetExplanationState]);
 
@@ -262,21 +188,6 @@ const resetState = useCallback(() => {
         return;
       }
 
-      const { value: context, error: contextLoadError } = await loadDocumentContext();
-      if (!context) {
-        const message = contextLoadError || contextError || 'Unable to load document context for this explanation.';
-        setExplanations((prev) => ({
-          ...prev,
-          [question.questionId]: {
-            isExpanded: true,
-            isLoading: false,
-            explanation: null,
-            error: message,
-          },
-        }));
-        return;
-      }
-
       if (!questionResult.selectedOptionId) {
         setExplanations((prev) => ({
           ...prev,
@@ -310,9 +221,22 @@ const resetState = useCallback(() => {
         return;
       }
 
+      if (!document) {
+        setExplanations((prev) => ({
+          ...prev,
+          [question.questionId]: {
+            isExpanded: true,
+            isLoading: false,
+            explanation: null,
+            error: 'Document context is unavailable for this explanation.',
+          },
+        }));
+        return;
+      }
+
       try {
         const response = await requestQuizQuestionExplanation({
-          documentContext: context,
+          documentId: document.id,
           questionText: question.questionText,
           userSelectedAnswer: selectedOption.optionText,
           correctAnswer: correctOption.optionText,
@@ -339,7 +263,7 @@ const resetState = useCallback(() => {
         }));
       }
     },
-    [contextError, explanations, loadDocumentContext, results]
+    [document, explanations, results]
   );
 
   const renderOption = (quizData: DocumentQuiz, questionId: string, optionId: string) => {
@@ -436,11 +360,11 @@ const resetState = useCallback(() => {
                   className={clsx(
                     'inline-flex items-center gap-2 rounded-md border border-yellow-300 px-3 py-1 text-xs font-medium text-yellow-700 transition',
                     {
-                      'cursor-not-allowed opacity-60': isExplanationLoading || isFetchingContext,
+                      'cursor-not-allowed opacity-60': isExplanationLoading,
                     }
                   )}
                   onClick={() => void handleToggleExplanation(question)}
-                  disabled={isExplanationLoading || isFetchingContext}
+                  disabled={isExplanationLoading}
                 >
                   {isExplanationLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -453,7 +377,7 @@ const resetState = useCallback(() => {
 
               {isExplanationExpanded && (
                 <div className="mt-3 rounded-md border border-yellow-200 bg-white/80 p-3 text-sm text-gray-800">
-                  {isExplanationLoading || (isFetchingContext && !explanationText) ? (
+                  {isExplanationLoading ? (
                     <div className="flex items-center gap-2 text-yellow-700">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <span>Generating explanation...</span>

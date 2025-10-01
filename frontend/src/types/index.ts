@@ -239,10 +239,11 @@ export interface QuizResultSummary {
 }
 
 export interface QuizExplanationRequest {
-  documentContext: string;
+  documentId: string;
   questionText: string;
   userSelectedAnswer: string;
   correctAnswer: string;
+  maxChunks?: number;
 }
 
 export interface QuizExplanationResponse {

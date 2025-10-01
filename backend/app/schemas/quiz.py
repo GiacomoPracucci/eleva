@@ -9,6 +9,7 @@ features like AI-generated explanations for incorrect answers.
 """
 
 from typing import List, Optional
+from uuid import UUID
 from pydantic import BaseModel, Field, ConfigDict
 from app.core.config import settings
 
@@ -61,10 +62,17 @@ class QuizGenerationRequest(BaseModel):
 class QuestionExplanationRequest(BaseModel):
     """Request payload for explaining an incorrect quiz answer."""
 
-    document_context: str = Field(..., alias="documentContext", min_length=1)
+    document_id: UUID = Field(..., alias="documentId")
     question_text: str = Field(..., alias="questionText", min_length=1)
     user_selected_answer: str = Field(..., alias="userSelectedAnswer", min_length=1)
     correct_answer: str = Field(..., alias="correctAnswer", min_length=1)
+    max_chunks: Optional[int] = Field(
+        default=None,
+        alias="maxChunks",
+        ge=1,
+        le=settings.QUIZ_EXPLANATION_MAX_CONTEXT_CHUNKS,
+        description="Optional override for the number of context chunks to retrieve."
+    )
 
     model_config = ConfigDict(populate_by_name=True)
 

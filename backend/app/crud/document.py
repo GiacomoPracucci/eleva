@@ -5,7 +5,7 @@ This module provides database operations for documents, chunks, and embeddings,
 following the same patterns as the existing CRUD modules in the application.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Sequence, Tuple
 from uuid import UUID
 import logging
 
@@ -421,6 +421,28 @@ class CRUDDocumentChunk:
         
         result = await db.execute(query)
         return result.scalars().all()
+
+    async def search_similar_chunks(
+        self,
+        db: AsyncSession,
+        document_id: UUID,
+        query_embedding: Sequence[float],
+        limit: int,
+    ) -> List[Tuple[DocumentChunk, float]]:
+        """Return document chunks ordered by vector similarity."""
+
+        distance_metric = DocumentEmbedding.embedding_vector.cosine_distance(query_embedding)
+
+        stmt = (
+            select(DocumentChunk, distance_metric.label("distance"))
+            .join(DocumentEmbedding, DocumentEmbedding.chunk_id == DocumentChunk.id)
+            .where(DocumentChunk.document_id == document_id)
+            .order_by(distance_metric)
+            .limit(limit)
+        )
+
+        result = await db.execute(stmt)
+        return result.all()
 
 
 # Create singleton instances
