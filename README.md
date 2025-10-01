@@ -147,3 +147,67 @@ License
 *"The best AI doesn't give you fish or teach you to fish---it helps you become the kind of person who naturally thinks like a fisherman."*
 
 **Eléva** - Where AI meets authentic learning.
+
+Docker Deployment
+-----------------
+
+The project now ships with a containerized setup that runs the PostgreSQL + pgvector database, FastAPI backend, and the Vite/React frontend behind an Nginx proxy.
+
+### Prerequisites
+
+- Docker Desktop (or the Docker Engine) 25+
+- Docker Compose v2 (ships with modern Docker Desktop builds)
+
+### 1. Configure environment files
+
+1. Copy the backend template and fill in secrets:
+   ```bash
+   cp backend/.env.docker.example backend/.env.docker
+   ```
+   - Update `SECRET_KEY` with a strong random value.
+   - Keep `DATABASE_URL` as-is unless you change the database credentials in `docker-compose.yml`.
+   - Provide real values for optional integrations as needed (e.g. `OPENAI_API_KEY`, SMTP, AWS S3). Leave them blank to disable those features.
+
+2. (Optional) Override frontend build values by creating `frontend/.env.docker` based on the provided example. If you skip this, the defaults baked into the Dockerfile are used.
+
+3. (Optional) Create a root `.env` file to override Compose-level defaults (e.g. `POSTGRES_USER`, `POSTGRES_PASSWORD`, `VITE_API_URL`).
+
+### 2. Build and start the stack
+
+```bash
+docker compose build        # builds backend + frontend images
+docker compose up -d        # launches db, backend, and frontend
+```
+
+What you get:
+
+- Frontend (SPA served by Nginx): <http://localhost:8080>
+- Backend API (FastAPI + automatic docs): <http://localhost:8000/docs>
+- PostgreSQL + pgvector: `localhost:5432`
+
+The backend waits for the database, applies Alembic migrations automatically, and then starts `uvicorn`.
+
+### 3. Common operational tasks
+
+- Inspect logs: `docker compose logs -f backend` (replace `backend` with any service name)
+- Run the super-admin bootstrapper inside the backend container:
+  ```bash
+  docker compose exec backend python create_super_admin.py
+  ```
+- Stop services while keeping database data: `docker compose down`
+- Reset everything (including the database volume):
+  ```bash
+  docker compose down -v
+  ```
+
+### 4. Customisation hints
+
+- **Change exposed ports:** Edit the `ports` section per service in `docker-compose.yml`.
+- **Skip automatic migrations:** Start the backend with `RUN_MIGRATIONS=false docker compose up backend`.
+- **Adjust frontend API target:** Set `VITE_API_URL` (either via `frontend/.env.docker` or a root `.env`) if you deploy the API under a different host.
+
+### 5. Security reminders
+
+- Do **not** commit filled `.env` files. The templates live in git; your real secrets should not.
+- Rotate any credentials that were previously stored in plain text (e.g. existing OpenAI or AWS keys) before deploying this stack.
+- For production usage, place the services behind HTTPS (e.g. Traefik, Nginx, Caddy) and configure proper backups for the `eleva-db-data` volume.

@@ -1,5 +1,7 @@
 backend/.env
 .env**
+!backend/.env.docker.example
+!frontend/.env.docker.example
 
  OS generated files
 .DS_Store

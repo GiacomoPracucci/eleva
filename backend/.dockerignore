@@ -1,0 +1,18 @@
+__pycache__
+*.py[cod]
+*.pyc
+*.log
+.env*
+.alembic_history
+.cache
+.idea
+.vscode
+pytest_cache
+.mypy_cache
+
+# Git metadata
+.git
+.gitignore
+
+# OS files
+.DS_Store
