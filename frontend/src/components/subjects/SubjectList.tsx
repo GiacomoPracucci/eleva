@@ -48,12 +48,17 @@ interface SubjectListProps {
    * Callback quando si archivia/disarchivia.
    */
   onArchive: (subject: Subject) => void;
-  
+
   /**
    * ID del subject in fase di eliminazione.
    * Usato per mostrare loading su card specifica.
    */
   deletingSubjectId: number | null;
+
+  /**
+   * Callback quando l'utente apre il workspace del subject.
+   */
+  onNavigate: (subject: Subject) => void;
   
   /**
    * Componente custom per empty state.
@@ -123,6 +128,7 @@ export const SubjectList: React.FC<SubjectListProps> = ({
   onDelete,
   onArchive,
   deletingSubjectId,
+  onNavigate,
   emptyStateComponent,
   gridLayout = 'default'
 }) => {
@@ -188,6 +194,7 @@ export const SubjectList: React.FC<SubjectListProps> = ({
             onDelete={onDelete}
             onArchive={onArchive}
             deletingSubjectId={deletingSubjectId}
+            onNavigate={onNavigate}
           />
         </div>
       ))}

@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, MoreVertical, Trash2 } from 'lucide-react';
+import { Download, MoreVertical, Sparkles, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 
 interface DocumentActionMenuProps {
   onDelete: () => void;
   onDownload?: () => void;
+  onGenerateQuiz?: () => void;
   isDeleting?: boolean;
   disableDownload?: boolean;
+  disableQuiz?: boolean;
 }
 
 /**
@@ -15,8 +17,10 @@ interface DocumentActionMenuProps {
 export const DocumentActionMenu: React.FC<DocumentActionMenuProps> = ({
   onDelete,
   onDownload,
+  onGenerateQuiz,
   isDeleting = false,
   disableDownload = false,
+  disableQuiz = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -49,6 +53,29 @@ export const DocumentActionMenu: React.FC<DocumentActionMenuProps> = ({
 
       {isOpen && (
         <div className="absolute right-0 z-20 mt-2 w-40 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg">
+          {onGenerateQuiz && (
+            <button
+              type="button"
+              onClick={() => {
+                if (disableQuiz) {
+                  return;
+                }
+                onGenerateQuiz();
+                setIsOpen(false);
+              }}
+              className={clsx(
+                'flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-medium transition',
+                disableQuiz
+                  ? 'cursor-not-allowed text-gray-300'
+                  : 'text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700'
+              )}
+              disabled={disableQuiz}
+            >
+              <Sparkles className="h-4 w-4" />
+              Generate quiz
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {

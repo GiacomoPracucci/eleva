@@ -7,6 +7,7 @@ import RegisterPage from '@/pages/RegisterPage';
 import DashboardPage from '@/pages/DashboardPage';
 import SubjectsPage from '@/pages/SubjectsPage';
 import ProfilePage from '@/pages/ProfilePage';
+import SubjectDetailPage from '@/pages/SubjectDetailPage';
 
 // Admin Panel Pages
 import AdminLayout from '@/components/admin/AdminLayout';
@@ -45,6 +46,7 @@ function App() {
             
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="subjects" element={<SubjectsPage />} />
+            <Route path="subjects/:subjectId" element={<SubjectDetailPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
 

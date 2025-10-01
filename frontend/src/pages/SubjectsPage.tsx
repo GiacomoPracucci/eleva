@@ -24,6 +24,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Subject } from '@/types';
 
 // Custom Hooks (Business Logic)
@@ -84,6 +85,8 @@ const SubjectsPage: React.FC = () => {
     toggleArchive,
     clearError,
   } = useSubjects();
+
+  const navigate = useNavigate();
   
   // ============================================================================
   // LOCAL UI STATE
@@ -188,6 +191,10 @@ const SubjectsPage: React.FC = () => {
       setDeletingSubjectId(null);
     }
   }, [deleteSubject]);
+
+  const handleNavigate = useCallback((subject: Subject) => {
+    navigate(`/subjects/${subject.id}`);
+  }, [navigate]);
   
   // ============================================================================
   // RENDER
@@ -237,6 +244,8 @@ const SubjectsPage: React.FC = () => {
             onDelete={handleDeleteClick}
             onArchive={toggleArchive}
             deletingSubjectId={deletingSubjectId}
+            onNavigate={handleNavigate}
+            gridLayout="expanded"
           />
         )}
         
