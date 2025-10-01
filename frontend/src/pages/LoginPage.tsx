@@ -56,7 +56,7 @@ const LoginPage = () => {
       // On successful login, redirect the user to their original destination or the dashboard.
       // `{ replace: true }` prevents the user from navigating back to the login page.
       navigate(from, { replace: true });
-    } catch (error) {
+    } catch {
       // The authStore is responsible for catching the error and setting the global
       // error state, so no explicit error handling is needed here in the component.
     }
@@ -92,6 +92,7 @@ const LoginPage = () => {
               <input
                 {...register('username', {
                   required: 'Username or email is required',
+                  onChange: () => clearError(),
                 })}
                 type="text"
                 id="username"
@@ -100,7 +101,6 @@ const LoginPage = () => {
                   errors.username ? 'border-red-300' : 'border-gray-300'
                 )}
                 placeholder="Enter your username or email"
-                onChange={() => clearError()}
               />
               {/* Displays the validation message if the username field is invalid */}
               {errors.username && (
@@ -117,6 +117,7 @@ const LoginPage = () => {
                 <input
                   {...register('password', {
                     required: 'Password is required',
+                    onChange: () => clearError(),
                   })}
                   type={showPassword ? 'text' : 'password'}
                   id="password"
@@ -125,7 +126,6 @@ const LoginPage = () => {
                     errors.password ? 'border-red-300' : 'border-gray-300'
                   )}
                   placeholder="Enter your password"
-                  onChange={() => clearError()}
                 />
                 {/* Button to toggle password visibility state */}
                 <button
